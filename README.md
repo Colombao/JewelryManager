@@ -135,7 +135,136 @@ O projeto não contemplará:
 - Princípios SOLID e Clean Code  
 
 ### Modelos C4
-(Disponível para desenvolvimento caso seja solicitado.)
+## C4 – Nível 1: Diagrama de Contexto
+
+O sistema ERP para Semi Joias é uma aplicação web que permite:
+
+- Gerenciar produtos
+- Criar kits automaticamente com base em tendências
+- Visualizar relatórios e dashboards
+- Integrar dados externos de tendências do mercado
+
+### Atores
+- **Usuário (Lojista / Administrador)**  
+  Interage através da interface web para gerenciar produtos e visualizar recomendações.
+
+### Sistema Principal
+- **ERP para Semi Joias**  
+  Sistema web responsável por gerenciar dados, exibir dashboards e processar recomendações.
+
+### Sistemas Externos
+- **API de Tendências (Google Trends / Base própria)**  
+  Fonte de dados usada para identificar produtos e categorias mais buscadas.
+
+### Relações
+- O usuário acessa o ERP via navegador.
+- O ERP consulta a API de Tendências.
+- O ERP processa dados e monta kits.
+- O ERP salva e recupera dados do Banco MySQL.
+  
+## C4 – Nível 2: Diagrama de Containers
+
+### Containers Principais
+
+1. **Frontend (Next.js)**
+   - Interface web responsiva.
+   - Renderiza views e dashboards.
+   - Envia requisições para a API via HTTP/HTTPS.
+
+2. **API ERP (Node.js / Express)**
+   - Contém toda a lógica de negócio.
+   - Realiza CRUD de produtos.
+   - Processa dados da API externa.
+   - Gera kits recomendados.
+   - Autentica usuários.
+
+3. **Banco de Dados (MySQL)**
+   - Armazena produtos, categorias, kits, tendências processadas, usuários.
+
+4. **API Externa de Tendências**
+   - Fornece dados sobre tendências de mercado.
+  
+## C4 – Nível 3: Componentes do Container "API ERP"
+
+### 1. AuthController
+- Login, logout, renovação de token JWT.
+- Middleware de segurança.
+
+### 2. ProductController
+- CRUD de produtos.
+- Validação de dados.
+- Busca paginada.
+
+### 3. KitRecommendationService
+- Consulta tendências.
+- Combina produtos em kits.
+- Aplica regras de recomendação.
+- Salva kits gerados.
+
+### 4. TrendIntegrationService
+- Conecta à API externa.
+- Converte dados brutos.
+- Padroniza formato interno.
+
+### 5. DashboardController
+- KPIs (estoque, kits, produtos quentes).
+- Histórico de tendências.
+- Indicadores de vendas (fase futura).
+
+### 6. Database Layer (Repository Pattern)
+- Conexão MySQL.
+- Consultas via MySQL2.
+- Sanitização e segurança.
+
+### 7. Middlewares
+- Autenticação JWT
+- Tratamento de erros
+- Rate limiting (opcional)
+
+## C4 – Nível 4: Estrutura de Código (Exemplo)
+
+src/
+ ├── controllers/
+ │    ├── AuthController.js
+ │    ├── ProductController.js
+ │    ├── DashboardController.js
+ │    └── KitController.js
+ │
+ ├── services/
+ │    ├── KitRecommendationService.js
+ │    ├── TrendIntegrationService.js
+ │    └── ProductService.js
+ │
+ ├── repositories/
+ │    ├── ProductRepository.js
+ │    ├── KitRepository.js
+ │    └── TrendRepository.js
+ │
+ ├── middlewares/
+ │    ├── auth.js
+ │    ├── errorHandler.js
+ │    └── rateLimiter.js
+ │
+ ├── config/
+ │    ├── db.js
+ │    └── env.js
+ │
+ ├── routes/
+ │    ├── authRoutes.js
+ │    ├── productRoutes.js
+ │    ├── kitRoutes.js
+ │    └── dashboardRoutes.js
+ │
+ └── app.js
+ 
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/fc937cd7-9a69-48fc-b552-3eb3d484c0a8" />
+
+
+### Fluxo
+
+Usuário → Frontend Next.js → API Node.js → Banco MySQL  
+API Node.js → API Externa de Tendências → Recomenda kits → Retorna ao frontend
+
 
 ### Mockups das Telas Principais
 A serem desenvolvidos usando Figma ou ferramenta equivalente.
@@ -227,4 +356,3 @@ Embora o projeto utilize tendências de mercado, não faz uso de dados sensívei
 ---
 
 # 5. Referências
-(Adicionar artigos, materiais de estudo e ferramentas utilizadas.)
