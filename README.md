@@ -320,3 +320,31 @@ Embora o projeto utilize tendências de mercado, não faz uso de dados sensívei
 ---
 
 # 5. Referências
+
+**Artigos Científicos**
+- Choi, H.; Varian, H. (2012). *Predicting the Present with Google Trends*. Economic Record.  
+- Hu, Y.; Koren, Y.; Volinsky, C. (2008). *Collaborative Filtering for Implicit Feedback Datasets*. IEEE International Conference on Data Mining.  
+- Jun, S.; Cho, S.; Park, H. (2018). *Analysis of the Relationship Between Google Trends and Fashion Market Trends*. Journal of Fashion Business.  
+- Silva, M. J.; Santos, T. (2021). *A utilização de sistemas ERP como ferramenta de apoio para micro e pequenas empresas*. Revista Gestão & Tecnologia.
+
+**Livros e Arquitetura**
+- Brown, Simon. *The C4 Model for Visualising Software Architecture*. c4model.com.  
+- Martin, Robert C. *Clean Architecture: A Craftsman's Guide to Software Structure and Design*. Prentice Hall.  
+- Evans, Eric. *Domain-Driven Design: Tackling Complexity in the Heart of Software*. Addison-Wesley.
+
+**Normas, Segurança e Boas Práticas**
+- Brasil. *Lei Geral de Proteção de Dados (LGPD)* – Lei nº 13.709/2018.  
+- OWASP Foundation. *OWASP Top 10 – Web Application Security Risks*.  
+- W3C. *WCAG 2.1 – Web Content Accessibility Guidelines*.
+
+**Documentação Técnica (tecnologias utilizadas)**
+- Next.js Documentation – https://nextjs.org/docs  
+- Node.js Documentation – https://nodejs.org/en/docs  
+- Express.js Documentation – https://expressjs.com  
+- MySQL Documentation – https://dev.mysql.com/doc/  
+
+**Produtos de Mercado (Soluções Correlatas)**
+- Bling ERP – https://www.bling.com.br  
+- Tiny ERP – https://www.tiny.com.br  
+- Omie ERP – https://www.omie.com.br  
+
