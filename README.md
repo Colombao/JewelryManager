@@ -186,76 +186,40 @@ O sistema ERP para Semi Joias é uma aplicação web que permite:
   
 ## C4 – Nível 3: Componentes do Container "API ERP"
 
-### 1. AuthController
+ 1. AuthController
 - Login, logout, renovação de token JWT.
 - Middleware de segurança.
 
-### 2. ProductController
+ 2. ProductController
 - CRUD de produtos.
 - Validação de dados.
 - Busca paginada.
 
-### 3. KitRecommendationService
+ 3. KitRecommendationService
 - Consulta tendências.
 - Combina produtos em kits.
 - Aplica regras de recomendação.
 - Salva kits gerados.
 
-### 4. TrendIntegrationService
+ 4. TrendIntegrationService
 - Conecta à API externa.
 - Converte dados brutos.
 - Padroniza formato interno.
 
-### 5. DashboardController
+ 5. DashboardController
 - KPIs (estoque, kits, produtos quentes).
 - Histórico de tendências.
 - Indicadores de vendas (fase futura).
 
-### 6. Database Layer (Repository Pattern)
+ 6. Database Layer (Repository Pattern)
 - Conexão MySQL.
 - Consultas via MySQL2.
 - Sanitização e segurança.
 
-### 7. Middlewares
+ 7. Middlewares
 - Autenticação JWT
 - Tratamento de erros
 - Rate limiting (opcional)
-
-## C4 – Nível 4: Estrutura de Código (Exemplo)
-
-src/
- ├── controllers/
- │    ├── AuthController.js
- │    ├── ProductController.js
- │    ├── DashboardController.js
- │    └── KitController.js
- │
- ├── services/
- │    ├── KitRecommendationService.js
- │    ├── TrendIntegrationService.js
- │    └── ProductService.js
- │
- ├── repositories/
- │    ├── ProductRepository.js
- │    ├── KitRepository.js
- │    └── TrendRepository.js
- │
- ├── middlewares/
- │    ├── auth.js
- │    ├── errorHandler.js
- │    └── rateLimiter.js
- │
- ├── config/
- │    ├── db.js
- │    └── env.js
- │
- ├── routes/
- │    ├── authRoutes.js
- │    ├── productRoutes.js
- │    ├── kitRoutes.js
- │    └── dashboardRoutes.js
- │
- └── app.js
  
 <img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/fc937cd7-9a69-48fc-b552-3eb3d484c0a8" />
 
