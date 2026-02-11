@@ -1,0 +1,33 @@
+# Git ignore for monorepo (front + back)
+
+# Node modules (ignore in all folders)
+node_modules/
+**/node_modules/
+
+# Next.js
+.next/
+out/
+
+# Build outputs
+dist/
+build/
+
+# Env files
+.env*
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Vercel
+.vercel
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Misc
+*.log
+*.pem
