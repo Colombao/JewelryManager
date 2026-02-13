@@ -1,0 +1,20 @@
+version: "3.8"
+services:
+  mysql:
+    image: mysql:latest
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: "123"
+      MYSQL_DATABASE: "jewlery_db"
+      MYSQL_PASSWORD: "123"
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_MAX_ALLOWED_PACKET: "256M"
+      command: --sql-mode="NO_ENGINE_SUBSTITUTION"
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+    networks:
+      - mynetwork
+
+networks:
+  mynetwork:
