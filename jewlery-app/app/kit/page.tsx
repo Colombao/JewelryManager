@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import MainLayout from "../components/MainLayout";
 import TextInput from "../components/TextInput";
 
@@ -71,7 +71,9 @@ export default function MontarKit() {
   };
 
   const totalPrice = calculateTotalPrice();
-  const kitPrice = formData.kitPrice ? parseFloat(formData.kitPrice) : totalPrice;
+  const kitPrice = formData.kitPrice
+    ? parseFloat(formData.kitPrice)
+    : totalPrice;
 
   return (
     <MainLayout>

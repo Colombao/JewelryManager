@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import MainLayout from "../components/MainLayout";
 import TextInput from "../components/TextInput";
 
@@ -224,9 +224,9 @@ export default function CadastroItem() {
           {/* Info Box */}
           <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-800">
-              <strong>💡 Dica:</strong> Os campos marcados com * são obrigatórios.
-              Certifique-se de preencher todas as informações necessárias para
-              uma melhor experiência do cliente.
+              <strong>💡 Dica:</strong> Os campos marcados com * são
+              obrigatórios. Certifique-se de preencher todas as informações
+              necessárias para uma melhor experiência do cliente.
             </p>
           </div>
         </div>

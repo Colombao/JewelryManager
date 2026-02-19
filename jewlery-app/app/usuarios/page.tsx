@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import MainLayout from "../components/MainLayout";
 import TextInput from "../components/TextInput";
 
@@ -83,9 +83,7 @@ export default function CadastroUsuario() {
           <h1 className="text-4xl font-bold text-slate-900 mb-2">
             Cadastrar Novo Usuário
           </h1>
-          <p className="text-slate-600">
-            Adicione um novo usuário ao sistema
-          </p>
+          <p className="text-slate-600">Adicione um novo usuário ao sistema</p>
         </div>
 
         {/* Form Container */}
@@ -307,8 +305,8 @@ export default function CadastroUsuario() {
           {/* Info Box */}
           <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-800">
-              <strong>💡 Dica:</strong> Os campos marcados com * são obrigatórios.
-              A senha deve ter no mínimo 6 caracteres.
+              <strong>💡 Dica:</strong> Os campos marcados com * são
+              obrigatórios. A senha deve ter no mínimo 6 caracteres.
             </p>
           </div>
         </div>
