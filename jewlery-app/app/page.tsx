@@ -1,8 +1,20 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import TextInput from "./components/TextInput";
 
 export default function Home() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Redireciona para o dashboard após login
+    router.push("/dashboard");
+  };
+
   return (
     <div className="min-h-screen bg-[#f3f7ff] flex items-center justify-center font-sans px-4">
       <div className="flex flex-col items-center w-full max-w-3xl">
@@ -54,11 +66,7 @@ export default function Home() {
               Insira suas credenciais para acessar sua conta.
             </p>
 
-            <form
-              className="mt-6 space-y-4"
-              action="#"
-              onSubmit={(e) => e.preventDefault()}
-            >
+            <form className="mt-6 space-y-4" onSubmit={handleLogin}>
               <label className="block">
                 <span className="sr-only">Email</span>
                 <div className="relative">
@@ -92,6 +100,8 @@ export default function Home() {
                     type="email"
                     placeholder="Digite seu email"
                     required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     icon={
                       <svg
                         width="16"
@@ -157,6 +167,8 @@ export default function Home() {
                     type="password"
                     placeholder="Digite sua senha"
                     required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     icon={
                       <svg
                         width="16"
