@@ -55,15 +55,14 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="p-4 space-y-2">
         {[
-          { icon: "🏠", label: "Dashboard", href: "/dashboard" },
+          { icon: "📊", label: "Dashboard", href: "/dashboard" },
           { icon: "💍", label: "Produtos", href: "/produtos" },
           { icon: "➕", label: "Cadastrar", href: "/cadastro" },
           { icon: "🎁", label: "Montar Kit", href: "/kit" },
-          { icon: "👥", label: "Usuários", href: "/usuarios" },
-          { icon: "❤️", label: "Favoritos", href: "/favoritos" },
-          { icon: "🛒", label: "Carrinho", href: "/carrinho", badge: "2" },
-          { icon: "⚙️", label: "Configurações", href: "/configuracoes" },
-        ].map((item, index) => (
+          { icon: "👥", label: "Revendedores", href: "/usuarios" },
+          { icon: "📈", label: "Tendencias", href: "/tendencias" },
+          { icon: "📉", label: "Análise", href: "/analise" },
+        ].map((item: any, index) => (
           <Link
             key={`nav-${index}-${item.label}`}
             href={item.href}
@@ -91,24 +90,6 @@ export default function Sidebar() {
 
       {/* Divider */}
       <div className="border-t border-slate-700 my-4"></div>
-
-      {/* Secondary Navigation */}
-      <nav className="p-4 space-y-2">
-        {[
-          { icon: "📱", label: "App Mobile", href: "#" },
-          { icon: "📞", label: "Suporte", href: "#" },
-          { icon: "📋", label: "Sobre", href: "#" },
-        ].map((item, index) => (
-          <Link
-            key={`secondary-${index}-${item.label}`}
-            href={item.href}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-700 transition text-sm text-slate-300"
-          >
-            <span className="text-xl">{item.icon}</span>
-            {isOpen && <span>{item.label}</span>}
-          </Link>
-        ))}
-      </nav>
 
       {/* User Profile */}
       {isOpen && (

@@ -1,11 +1,19 @@
 {
+  "type": "module",
   "dependencies": {
-    "express": "^5.2.1",
     "@prisma/client": "^5.12.0",
     "bcryptjs": "^2.4.3",
+    "cheerio": "^1.2.0",
+    "cors": "^2.8.6",
     "dotenv": "^16.1.4",
+    "express": "^5.2.1",
+    "google-trends-api": "^4.9.2",
     "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.6.0"
+    "mysql2": "^3.6.0",
+    "node-cron": "^4.2.1",
+    "puppeteer": "^24.40.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   },
   "devDependencies": {
     "prisma": "^5.12.0"

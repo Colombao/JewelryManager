@@ -1,10 +1,14 @@
-require("dotenv").config();
-const express = require("express");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const prisma = require("./prismaClient");
+import bcrypt from "bcryptjs";
+import cors from "cors";
+import "dotenv/config";
+import express from "express";
+import jwt from "jsonwebtoken";
+import prisma from "./database/prismaClient.js";
+import marketplaceRoutes from "./modules/marketplace/marketplace.routes.js";
+import trendsRoutes from "./modules/trends/trends.routes.js";
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 // Register (optional helper route)
@@ -82,4 +86,7 @@ app.get("/me", authMiddleware, async (req, res) => {
   res.json({ id: user.id, email: user.email, name: user.name });
 });
 
-module.exports = app;
+app.use("/trends", trendsRoutes);
+app.use("/marketplace", marketplaceRoutes);
+
+export default app;
