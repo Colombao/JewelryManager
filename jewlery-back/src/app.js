@@ -5,6 +5,7 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import prisma from "./database/prismaClient.js";
 import marketplaceRoutes from "./modules/marketplace/marketplace.routes.js";
+import resellersRoutes from "./modules/resellers/resellers.routes.js";
 import trendsRoutes from "./modules/trends/trends.routes.js";
 
 const app = express();
@@ -88,5 +89,6 @@ app.get("/me", authMiddleware, async (req, res) => {
 
 app.use("/trends", trendsRoutes);
 app.use("/marketplace", marketplaceRoutes);
+app.use("/resellers", resellersRoutes);
 
 export default app;

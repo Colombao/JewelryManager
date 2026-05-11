@@ -8,11 +8,43 @@ export default function Home() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Redireciona para o dashboard após login
-    router.push("/dashboard");
+
+    setErrorMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Não foi possível entrar.");
+      }
+
+      localStorage.setItem("authToken", data.token);
+      localStorage.setItem("authUser", JSON.stringify(data.user));
+
+      router.push("/dashboard");
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Não foi possível entrar."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -69,8 +101,16 @@ export default function Home() {
             <form className="mt-6 space-y-4" onSubmit={handleLogin}>
               <label className="block">
                 <span className="sr-only">Email</span>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <TextInput
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="Digite seu email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  icon={
                     <svg
                       width="16"
                       height="16"
@@ -93,47 +133,22 @@ export default function Home() {
                         strokeLinejoin="round"
                       />
                     </svg>
-                  </span>
-                  <TextInput
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="Digite seu email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    icon={
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M3 8.5v7A2.5 2.5 0 0 0 5.5 18h13A2.5 2.5 0 0 0 21 15.5v-7"
-                          stroke="#94a3b8"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d="M21 8.5l-9 6-9-6"
-                          stroke="#94a3b8"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    }
-                  />
-                </div>
+                  }
+                />
               </label>
 
               <label className="block">
                 <span className="sr-only">Password</span>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <TextInput
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="Digite sua senha"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  icon={
                     <svg
                       width="16"
                       height="16"
@@ -160,52 +175,22 @@ export default function Home() {
                         strokeLinejoin="round"
                       />
                     </svg>
-                  </span>
-                  <TextInput
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder="Digite sua senha"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    icon={
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <rect
-                          x="3"
-                          y="11"
-                          width="18"
-                          height="10"
-                          rx="2"
-                          stroke="#94a3b8"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d="M7 11V8a5 5 0 0 1 10 0v3"
-                          stroke="#94a3b8"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    }
-                  />
-                </div>
+                  }
+                />
               </label>
+
+              {errorMessage && (
+                <p className="text-sm text-red-600 text-center">
+                  {errorMessage}
+                </p>
+              )}
 
               <button
                 type="submit"
-                className="w-full h-12 bg-gradient-to-b from-blue-500 to-blue-600 text-white rounded-md font-medium shadow-sm cursor-pointer hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                disabled={isSubmitting}
+                className="w-full h-12 bg-gradient-to-b from-blue-500 to-blue-600 text-white rounded-md font-medium shadow-sm cursor-pointer hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Entrar
+                {isSubmitting ? "Entrando..." : "Entrar"}
               </button>
             </form>
 

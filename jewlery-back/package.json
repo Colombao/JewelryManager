@@ -21,6 +21,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
+    "seed:auth": "node seed-auth.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init"
   }

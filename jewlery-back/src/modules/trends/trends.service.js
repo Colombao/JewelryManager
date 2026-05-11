@@ -1,5 +1,5 @@
 // trends.service.js
-import { getGoogleTrends } from "../../providers/googleTrends.provider.js";
+import { getTrendsAnalysis } from "../../providers/googleTrends.provider.js";
 import { trendsRepository } from "./trends.repository.js";
 
 function calculateScore(googleValue) {
@@ -12,15 +12,15 @@ export const trendsService = {
   },
 
   async updateTrends() {
-    const googleData = await getGoogleTrends();
+    const analysis = await getTrendsAnalysis();
+    const googleData = analysis.allTrends || [];
 
     const trends = googleData.map((item) => ({
-      nome: item.nome,
-      descricao: item.descricao,
-      categoria: item.categoria,
-      imagem: item.imagem,
+      keyword: item.keyword,
+      value: item.value,
+      category: item.category,
       score: calculateScore(item.value),
-      status: item.value > 50 ? "alta" : "baixa",
+      status: item.status,
     }));
 
     await trendsRepository.saveMany(trends);

@@ -1,10 +1,34 @@
 "use client";
 
+import { useAuth } from "@/app/contexts/AuthContext";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+interface NavItem {
+  icon: string;
+  label: string;
+  href: string;
+  badge?: number;
+}
+
 export default function Sidebar() {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen] = useState(true);
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
+
+  const userInitials = user?.name
+    ? user.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+    : user?.email?.charAt(0).toUpperCase() || "U";
 
   return (
     <aside
@@ -34,35 +58,21 @@ export default function Sidebar() {
           </div>
           {isOpen && <span className="font-bold text-lg">Jewlery</span>}
         </div>
-        {/* <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="p-1 hover:bg-slate-700 rounded transition"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M15 18l-6-6m6 0l-6 6" />
-            <path d="M9 18l6-6M9 6l6 6" />
-          </svg>
-        </button> */}
       </div>
 
       {/* Navigation */}
       <nav className="p-4 space-y-2">
-        {[
-          { icon: "📊", label: "Dashboard", href: "/dashboard" },
-          { icon: "💍", label: "Produtos", href: "/produtos" },
-          { icon: "➕", label: "Cadastrar", href: "/cadastro" },
-          { icon: "🎁", label: "Montar Kit", href: "/kit" },
-          { icon: "👥", label: "Revendedores", href: "/usuarios" },
-          { icon: "📈", label: "Tendencias", href: "/tendencias" },
-          { icon: "📉", label: "Análise", href: "/analise" },
-        ].map((item: any, index) => (
+        {(
+          [
+            { icon: "📊", label: "Dashboard", href: "/dashboard" },
+            { icon: "💍", label: "Produtos", href: "/produtos" },
+            { icon: "➕", label: "Cadastrar", href: "/cadastro" },
+            { icon: "🎁", label: "Montar Kit", href: "/kit" },
+            { icon: "👥", label: "Revendedores", href: "/usuarios" },
+            { icon: "📈", label: "Tendencias", href: "/tendencias" },
+            { icon: "📉", label: "Análise", href: "/analise" },
+          ] as NavItem[]
+        ).map((item, index) => (
           <Link
             key={`nav-${index}-${item.label}`}
             href={item.href}
@@ -92,17 +102,39 @@ export default function Sidebar() {
       <div className="border-t border-slate-700 my-4"></div>
 
       {/* User Profile */}
-      {isOpen && (
-        <div className="absolute bottom-4 left-4 right-4 bg-slate-700 rounded-lg p-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-b from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-bold">
-              JV
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">João Vitor</p>
-              <p className="text-xs text-slate-400 truncate">user@email.com</p>
+      {isOpen && user && (
+        <div className="absolute bottom-4 left-4 right-4 space-y-3">
+          <div className="bg-slate-700 rounded-lg p-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-b from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                {userInitials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {user.name || "Usuário"}
+                </p>
+                <p className="text-xs text-slate-400 truncate">{user.email}</p>
+              </div>
             </div>
           </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 transition text-sm font-medium"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            Sair
+          </button>
         </div>
       )}
     </aside>
