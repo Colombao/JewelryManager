@@ -1,234 +1,374 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import Button from "../components/Button";
 import MainLayout from "../components/MainLayout";
+import Modal from "../components/Modal";
 import TextInput from "../components/TextInput";
 
 export default function CadastroItem() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     name: "",
-    category: "Anéis",
-    price: "",
-    description: "",
-    material: "",
-    weight: "",
-    stock: "",
-    color: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    cpf: "",
+    phone: "",
+    role: "cliente",
+    address: "",
+    city: "",
+    state: "",
   });
 
-  const categories = ["Anéis", "Colares", "Brincos", "Pulseiras"];
-  const materials = ["Ouro", "Prata", "Platina", "Diamante", "Pérola"];
+  const [passwordError, setPasswordError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generalError, setGeneralError] = useState("");
+
+  const [resellers, setResellers] = useState<any[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
   const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
+
+    // Clear password error when user changes a password field
+    if ((name === "password" || name === "confirmPassword") && passwordError) {
+      setPasswordError("");
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Produto cadastrado:", formData);
-    // Aqui você pode fazer a requisição para o backend
-    router.push("/dashboard");
+
+    // Validar senhas
+    if (formData.password !== formData.confirmPassword) {
+      const msg = "As senhas não correspondem!";
+      setPasswordError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      const msg = "A senha deve ter pelo menos 6 caracteres!";
+      setPasswordError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setGeneralError("");
+
+    try {
+      const url = editingId
+        ? `${apiUrl}/resellers/${editingId}`
+        : `${apiUrl}/resellers`;
+      const method = editingId ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          cpf: formData.cpf,
+          phone: formData.phone,
+          role: formData.role,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const msg =
+          data?.error ||
+          (editingId
+            ? "Erro ao atualizar revendedor"
+            : "Erro ao cadastrar revendedor");
+        throw new Error(msg);
+      }
+
+      toast.success(
+        editingId
+          ? "Revendedor atualizado com sucesso!"
+          : "Revendedor cadastrado com sucesso!"
+      );
+      // Refresh list and reset form
+      await loadResellers();
+      resetForm();
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Erro ao cadastrar revendedor";
+      setGeneralError(msg);
+      toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
-    router.push("/dashboard");
+    // if editing, cancel edit, else navigate back
+    if (editingId) {
+      resetForm();
+      return;
+    }
+    router.push("/usuarios");
   };
+
+  function resetForm() {
+    setFormData({
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      cpf: "",
+      phone: "",
+      role: "cliente",
+      address: "",
+      city: "",
+      state: "",
+    });
+    setEditingId(null);
+    setPasswordError("");
+    setGeneralError("");
+  }
+
+  async function loadResellers() {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`${apiUrl}/resellers`);
+      if (!res.ok) throw new Error("Erro ao buscar revendedores");
+      const list = await res.json();
+      setResellers(list);
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Erro ao buscar revendedores"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function handleEdit(item: any) {
+    setEditingId(item.id);
+    setFormData({
+      name: item.name || "",
+      email: item.email || "",
+      password: "",
+      confirmPassword: "",
+      cpf: item.cpf || "",
+      phone: item.phone || "",
+      role: item.role || "cliente",
+      address: item.address || "",
+      city: item.city || "",
+      state: item.state || "",
+    });
+    setShowModal(true);
+  }
+
+  async function handleToggleActive(id: number, current: boolean) {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`${apiUrl}/resellers/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: !current }),
+      });
+      if (!res.ok) throw new Error("Erro ao atualizar status");
+      toast.success(!current ? "Revendedor ativado" : "Revendedor desativado");
+      await loadResellers();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao atualizar status");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    const ok = confirm("Confirma exclusão deste revendedor?");
+    if (!ok) return;
+    try {
+      setIsLoading(true);
+      const res = await fetch(`${apiUrl}/resellers/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Erro ao excluir revendedor");
+      toast.success("Revendedor excluído");
+      await loadResellers();
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Erro ao excluir revendedor"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadResellers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <MainLayout>
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">
-            Cadastrar Novo Produto
-          </h1>
+          <h1 className="text-4xl font-bold text-slate-900 mb-2">Produtos</h1>
           <p className="text-slate-600">
-            Preencha os detalhes do novo item para sua coleção
+            Gerencie produtos: visualizar, criar, editar e excluir.
           </p>
         </div>
 
-        {/* Form Container */}
-        <div className="max-w-4xl">
-          <div className="bg-white rounded-xl shadow-lg p-8">
+        <div className="flex items-center justify-between mb-6">
+          <div />
+          <div className="flex gap-3">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                resetForm();
+                setShowModal(true);
+              }}
+            >
+              Novo Produto
+            </Button>
+          </div>
+        </div>
+
+        <div className="max-w-full">
+          <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left table-auto">
+                <thead className="bg-slate-50">
+                  <tr className="text-sm text-slate-700 uppercase tracking-wide">
+                    <th className="px-4 py-3">Nome</th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">CPF</th>
+                    <th className="px-4 py-3">Telefone</th>
+                    <th className="px-4 py-3">Ativo</th>
+                    <th className="px-4 py-3">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resellers.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="px-4 py-8 text-center text-slate-500"
+                      >
+                        {isLoading ? (
+                          <div className="animate-pulse">
+                            Carregando produtos...
+                          </div>
+                        ) : (
+                          "Nenhum produto cadastrado."
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  {resellers.map((r, idx) => (
+                    <tr
+                      key={r.id}
+                      className={`border-t ${
+                        idx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                      } hover:bg-slate-100`}
+                    >
+                      <td className="px-4 py-3 font-semibold text-slate-800">
+                        {r.name}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{r.email}</td>
+                      <td className="px-4 py-3 text-slate-600">{r.cpf}</td>
+                      <td className="px-4 py-3 text-slate-600">{r.phone}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {r.active ? "Sim" : "Não"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="text-sm px-3 py-1"
+                            onClick={() => {
+                              handleEdit(r);
+                            }}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="text-sm px-3 py-1"
+                            onClick={() => handleDelete(r.id)}
+                          >
+                            Excluir
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={`${r.active ? "danger" : "success"}`}
+                            className="text-sm px-3 py-1"
+                            onClick={() => handleToggleActive(r.id, r.active)}
+                          >
+                            {r.active ? "Desativar" : "Ativar"}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <Modal
+            open={showModal}
+            title={editingId ? "Editar Produto" : "Novo Produto"}
+            onClose={() => {
+              setShowModal(false);
+              resetForm();
+            }}
+          >
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Grid 2 colunas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Nome do Produto */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Nome do Produto *
-                  </label>
-                  <TextInput
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="Ex: Anel de Diamante"
-                    required
-                  />
-                </div>
+            
 
-                {/* Categoria */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Categoria *
-                  </label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  >
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Preço */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Preço (R$) *
-                  </label>
-                  <TextInput
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleChange}
-                    placeholder="1299.99"
-                    step="0.01"
-                    min="0"
-                    required
-                  />
-                </div>
-
-                {/* Material */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Material *
-                  </label>
-                  <select
-                    name="material"
-                    value={formData.material}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  >
-                    <option value="">Selecione um material</option>
-                    {materials.map((mat) => (
-                      <option key={mat} value={mat}>
-                        {mat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Peso */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Peso (g)
-                  </label>
-                  <TextInput
-                    type="number"
-                    name="weight"
-                    value={formData.weight}
-                    onChange={handleChange}
-                    placeholder="5.5"
-                    step="0.1"
-                    min="0"
-                  />
-                </div>
-
-                {/* Cor */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Cor
-                  </label>
-                  <TextInput
-                    type="text"
-                    name="color"
-                    value={formData.color}
-                    onChange={handleChange}
-                    placeholder="Ex: Ouro Amarelo"
-                  />
-                </div>
-
-                {/* Estoque */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Quantidade em Estoque *
-                  </label>
-                  <TextInput
-                    type="number"
-                    name="stock"
-                    value={formData.stock}
-                    onChange={handleChange}
-                    placeholder="10"
-                    min="0"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Descrição - Full Width */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Descrição *
-                </label>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  placeholder="Descreva os detalhes do produto..."
-                  required
-                  rows={5}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none"
-                />
-              </div>
-
-              {/* Divider */}
-              <div className="border-t border-slate-200"></div>
-
-              {/* Buttons */}
               <div className="flex items-center justify-end gap-4">
-                <button
+                <Button
                   type="button"
-                  onClick={handleCancel}
-                  className="px-6 py-3 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition font-medium"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowModal(false);
+                    resetForm();
+                  }}
                 >
                   Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition font-medium shadow-md"
-                >
-                  Cadastrar Produto
-                </button>
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting
+                    ? "Salvando..."
+                    : editingId
+                    ? "Salvar Alterações"
+                    : "Cadastrar"}
+                </Button>
               </div>
             </form>
-          </div>
-
-          {/* Info Box */}
-          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              <strong>💡 Dica:</strong> Os campos marcados com * são
-              obrigatórios. Certifique-se de preencher todas as informações
-              necessárias para uma melhor experiência do cliente.
-            </p>
-          </div>
+          </Modal>
         </div>
       </div>
     </MainLayout>

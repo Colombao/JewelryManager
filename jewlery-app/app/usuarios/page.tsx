@@ -324,7 +324,7 @@ export default function CadastroUsuario() {
                           </Button>
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant={`${r.active ? "danger" : "success"}`}
                             className="text-sm px-3 py-1"
                             onClick={() => handleToggleActive(r.id, r.active)}
                           >
