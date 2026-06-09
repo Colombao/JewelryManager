@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import Button from "../components/Button";
 import MainLayout from "../components/MainLayout";
 import Modal from "../components/Modal";
-import TextInput from "../components/TextInput";
+import RequireAuth from "../components/RequireAuth";
 
 export default function CadastroItem() {
   const router = useRouter();
@@ -227,150 +227,150 @@ export default function CadastroItem() {
   }, []);
 
   return (
-    <MainLayout>
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">Produtos</h1>
-          <p className="text-slate-600">
-            Gerencie produtos: visualizar, criar, editar e excluir.
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between mb-6">
-          <div />
-          <div className="flex gap-3">
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => {
-                resetForm();
-                setShowModal(true);
-              }}
-            >
-              Novo Produto
-            </Button>
+    <RequireAuth>
+      <MainLayout>
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-8">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-slate-900 mb-2">Produtos</h1>
+            <p className="text-slate-600">
+              Gerencie produtos: visualizar, criar, editar e excluir.
+            </p>
           </div>
-        </div>
 
-        <div className="max-w-full">
-          <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left table-auto">
-                <thead className="bg-slate-50">
-                  <tr className="text-sm text-slate-700 uppercase tracking-wide">
-                    <th className="px-4 py-3">Nome</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">CPF</th>
-                    <th className="px-4 py-3">Telefone</th>
-                    <th className="px-4 py-3">Ativo</th>
-                    <th className="px-4 py-3">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resellers.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="px-4 py-8 text-center text-slate-500"
-                      >
-                        {isLoading ? (
-                          <div className="animate-pulse">
-                            Carregando produtos...
-                          </div>
-                        ) : (
-                          "Nenhum produto cadastrado."
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                  {resellers.map((r, idx) => (
-                    <tr
-                      key={r.id}
-                      className={`border-t ${
-                        idx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                      } hover:bg-slate-100`}
-                    >
-                      <td className="px-4 py-3 font-semibold text-slate-800">
-                        {r.name}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{r.email}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.cpf}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.phone}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {r.active ? "Sim" : "Não"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="text-sm px-3 py-1"
-                            onClick={() => {
-                              handleEdit(r);
-                            }}
-                          >
-                            Editar
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="text-sm px-3 py-1"
-                            onClick={() => handleDelete(r.id)}
-                          >
-                            Excluir
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={`${r.active ? "danger" : "success"}`}
-                            className="text-sm px-3 py-1"
-                            onClick={() => handleToggleActive(r.id, r.active)}
-                          >
-                            {r.active ? "Desativar" : "Ativar"}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="flex items-center justify-between mb-6">
+            <div />
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  resetForm();
+                  setShowModal(true);
+                }}
+              >
+                Novo Produto
+              </Button>
             </div>
           </div>
 
-          <Modal
-            open={showModal}
-            title={editingId ? "Editar Produto" : "Novo Produto"}
-            onClose={() => {
-              setShowModal(false);
-              resetForm();
-            }}
-          >
-            <form onSubmit={handleSubmit} className="space-y-6">
-            
-
-              <div className="flex items-center justify-end gap-4">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setShowModal(false);
-                    resetForm();
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting
-                    ? "Salvando..."
-                    : editingId
-                    ? "Salvar Alterações"
-                    : "Cadastrar"}
-                </Button>
+          <div className="max-w-full">
+            <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left table-auto">
+                  <thead className="bg-slate-50">
+                    <tr className="text-sm text-slate-700 uppercase tracking-wide">
+                      <th className="px-4 py-3">Nome</th>
+                      <th className="px-4 py-3">Email</th>
+                      <th className="px-4 py-3">CPF</th>
+                      <th className="px-4 py-3">Telefone</th>
+                      <th className="px-4 py-3">Ativo</th>
+                      <th className="px-4 py-3">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resellers.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-4 py-8 text-center text-slate-500"
+                        >
+                          {isLoading ? (
+                            <div className="animate-pulse">
+                              Carregando produtos...
+                            </div>
+                          ) : (
+                            "Nenhum produto cadastrado."
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    {resellers.map((r, idx) => (
+                      <tr
+                        key={r.id}
+                        className={`border-t ${
+                          idx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                        } hover:bg-slate-100`}
+                      >
+                        <td className="px-4 py-3 font-semibold text-slate-800">
+                          {r.name}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">{r.email}</td>
+                        <td className="px-4 py-3 text-slate-600">{r.cpf}</td>
+                        <td className="px-4 py-3 text-slate-600">{r.phone}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {r.active ? "Sim" : "Não"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="text-sm px-3 py-1"
+                              onClick={() => {
+                                handleEdit(r);
+                              }}
+                            >
+                              Editar
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="text-sm px-3 py-1"
+                              onClick={() => handleDelete(r.id)}
+                            >
+                              Excluir
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={`${r.active ? "danger" : "success"}`}
+                              className="text-sm px-3 py-1"
+                              onClick={() => handleToggleActive(r.id, r.active)}
+                            >
+                              {r.active ? "Desativar" : "Ativar"}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </form>
-          </Modal>
+            </div>
+
+            <Modal
+              open={showModal}
+              title={editingId ? "Editar Produto" : "Novo Produto"}
+              onClose={() => {
+                setShowModal(false);
+                resetForm();
+              }}
+            >
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="flex items-center justify-end gap-4">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setShowModal(false);
+                      resetForm();
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting
+                      ? "Salvando..."
+                      : editingId
+                      ? "Salvar Alterações"
+                      : "Cadastrar"}
+                  </Button>
+                </div>
+              </form>
+            </Modal>
+          </div>
         </div>
-      </div>
-    </MainLayout>
+      </MainLayout>
+    </RequireAuth>
   );
 }

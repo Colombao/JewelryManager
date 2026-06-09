@@ -53,3 +53,38 @@ model Trend {
 
   product Product @relation(fields: [productId], references: [id])
 }
+
+model Board {
+  id        Int     @id @default(autoincrement())
+  name      String
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  steps Step[]
+  cards Card[]
+}
+
+model Step {
+  id        Int     @id @default(autoincrement())
+  boardId   Int
+  name      String
+  order     Int
+  createdAt DateTime @default(now())
+
+  board Board @relation(fields: [boardId], references: [id])
+  cards Card[]
+}
+
+model Card {
+  id          Int       @id @default(autoincrement())
+  stepId      Int
+  boardId     Int
+  title       String
+  description String?  @db.Text
+  order       Int
+  createdAt   DateTime  @default(now())
+
+  step Step @relation(fields: [stepId], references: [id])
+  board Board @relation(fields: [boardId], references: [id])
+}
+

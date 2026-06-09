@@ -2,11 +2,14 @@
 
 import MainLayout from "../components/MainLayout";
 import MarketplaceTrends from "../components/MarketplaceTrends";
+import RequireAuth from "../components/RequireAuth";
 
 export default function TendencionasPage() {
   return (
-    <MainLayout>
-      <MarketplaceTrends />
-    </MainLayout>
+    <RequireAuth>
+      <MainLayout>
+        <MarketplaceTrends />
+      </MainLayout>
+    </RequireAuth>
   );
 }

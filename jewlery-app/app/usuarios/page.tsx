@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import Button from "../components/Button";
 import MainLayout from "../components/MainLayout";
+import RequireAuth from "../components/RequireAuth";
+
 import Modal from "../components/Modal";
 import TextInput from "../components/TextInput";
 
@@ -227,297 +229,299 @@ export default function CadastroUsuario() {
   }, []);
 
   return (
-    <MainLayout>
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">
-            Revendedores
-          </h1>
-          <p className="text-slate-600">
-            Gerencie revendedores: visualizar, criar, editar e excluir.
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between mb-6">
-          <div />
-          <div className="flex gap-3">
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => {
-                resetForm();
-                setShowModal(true);
-              }}
-            >
-              Novo Revendedor
-            </Button>
+    <RequireAuth>
+      <MainLayout>
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-8">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-slate-900 mb-2">
+              Revendedores
+            </h1>
+            <p className="text-slate-600">
+              Gerencie revendedores: visualizar, criar, editar e excluir.
+            </p>
           </div>
-        </div>
 
-        <div className="max-w-full">
-          <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left table-auto">
-                <thead className="bg-slate-50">
-                  <tr className="text-sm text-slate-700 uppercase tracking-wide">
-                    <th className="px-4 py-3">Nome</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">CPF</th>
-                    <th className="px-4 py-3">Telefone</th>
-                    <th className="px-4 py-3">Ativo</th>
-                    <th className="px-4 py-3">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resellers.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="px-4 py-8 text-center text-slate-500"
-                      >
-                        {isLoading ? (
-                          <div className="animate-pulse">
-                            Carregando revendedores...
-                          </div>
-                        ) : (
-                          "Nenhum revendedor cadastrado."
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                  {resellers.map((r, idx) => (
-                    <tr
-                      key={r.id}
-                      className={`border-t ${
-                        idx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                      } hover:bg-slate-100`}
-                    >
-                      <td className="px-4 py-3 font-semibold text-slate-800">
-                        {r.name}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{r.email}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.cpf}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.phone}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {r.active ? "Sim" : "Não"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="text-sm px-3 py-1"
-                            onClick={() => {
-                              handleEdit(r);
-                            }}
-                          >
-                            Editar
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="text-sm px-3 py-1"
-                            onClick={() => handleDelete(r.id)}
-                          >
-                            Excluir
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={`${r.active ? "danger" : "success"}`}
-                            className="text-sm px-3 py-1"
-                            onClick={() => handleToggleActive(r.id, r.active)}
-                          >
-                            {r.active ? "Desativar" : "Ativar"}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="flex items-center justify-between mb-6">
+            <div />
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  resetForm();
+                  setShowModal(true);
+                }}
+              >
+                Novo Revendedor
+              </Button>
             </div>
           </div>
 
-          <Modal
-            open={showModal}
-            title={editingId ? "Editar Revendedor" : "Novo Revendedor"}
-            onClose={() => {
-              setShowModal(false);
-              resetForm();
-            }}
-          >
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Grid 2 colunas - Dados Pessoais */}
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                  Dados Pessoais
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Nome Completo *
-                    </label>
-                    <TextInput
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      placeholder="Ex: João Silva"
-                      required
-                    />
-                  </div>
+          <div className="max-w-full">
+            <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left table-auto">
+                  <thead className="bg-slate-50">
+                    <tr className="text-sm text-slate-700 uppercase tracking-wide">
+                      <th className="px-4 py-3">Nome</th>
+                      <th className="px-4 py-3">Email</th>
+                      <th className="px-4 py-3">CPF</th>
+                      <th className="px-4 py-3">Telefone</th>
+                      <th className="px-4 py-3">Ativo</th>
+                      <th className="px-4 py-3">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resellers.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-4 py-8 text-center text-slate-500"
+                        >
+                          {isLoading ? (
+                            <div className="animate-pulse">
+                              Carregando revendedores...
+                            </div>
+                          ) : (
+                            "Nenhum revendedor cadastrado."
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    {resellers.map((r, idx) => (
+                      <tr
+                        key={r.id}
+                        className={`border-t ${
+                          idx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                        } hover:bg-slate-100`}
+                      >
+                        <td className="px-4 py-3 font-semibold text-slate-800">
+                          {r.name}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">{r.email}</td>
+                        <td className="px-4 py-3 text-slate-600">{r.cpf}</td>
+                        <td className="px-4 py-3 text-slate-600">{r.phone}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {r.active ? "Sim" : "Não"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="text-sm px-3 py-1"
+                              onClick={() => {
+                                handleEdit(r);
+                              }}
+                            >
+                              Editar
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="text-sm px-3 py-1"
+                              onClick={() => handleDelete(r.id)}
+                            >
+                              Excluir
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={`${r.active ? "danger" : "success"}`}
+                              className="text-sm px-3 py-1"
+                              onClick={() => handleToggleActive(r.id, r.active)}
+                            >
+                              {r.active ? "Desativar" : "Ativar"}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      CPF *
-                    </label>
-                    <TextInput
-                      type="text"
-                      name="cpf"
-                      value={formData.cpf}
-                      onChange={handleChange}
-                      placeholder="000.000.000-00"
-                      required
-                    />
-                  </div>
+            <Modal
+              open={showModal}
+              title={editingId ? "Editar Revendedor" : "Novo Revendedor"}
+              onClose={() => {
+                setShowModal(false);
+                resetForm();
+              }}
+            >
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Grid 2 colunas - Dados Pessoais */}
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 mb-4">
+                    Dados Pessoais
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Nome Completo *
+                      </label>
+                      <TextInput
+                        type="text"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleChange}
+                        placeholder="Ex: João Silva"
+                        required
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Email *
-                    </label>
-                    <TextInput
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      placeholder="usuario@email.com"
-                      required
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        CPF *
+                      </label>
+                      <TextInput
+                        type="text"
+                        name="cpf"
+                        value={formData.cpf}
+                        onChange={handleChange}
+                        placeholder="000.000.000-00"
+                        required
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Telefone *
-                    </label>
-                    <TextInput
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      placeholder="(11) 99999-9999"
-                      required
-                    />
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Email *
+                      </label>
+                      <TextInput
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        placeholder="usuario@email.com"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Telefone *
+                      </label>
+                      <TextInput
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        placeholder="(11) 99999-9999"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="border-t border-slate-200"></div>
+                <div className="border-t border-slate-200"></div>
 
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                  Dados de Acesso
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Senha *
-                    </label>
-                    <TextInput
-                      type="password"
-                      name="password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      placeholder="Mínimo 6 caracteres"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Confirmar Senha *
-                    </label>
-                    <TextInput
-                      type="password"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      placeholder="Repita a senha"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-slate-200"></div>
-
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                  Informações Adicionais
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Endereço
-                    </label>
-                    <TextInput
-                      type="text"
-                      name="address"
-                      value={formData.address}
-                      onChange={handleChange}
-                      placeholder="Rua, número e complemento"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Cidade
-                    </label>
-                    <TextInput
-                      type="text"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleChange}
-                      placeholder="São Paulo"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Estado
-                    </label>
-                    <TextInput
-                      type="text"
-                      name="state"
-                      value={formData.state}
-                      onChange={handleChange}
-                      placeholder="SP"
-                      maxLength={2}
-                    />
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 mb-4">
+                    Dados de Acesso
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Senha *
+                      </label>
+                      <TextInput
+                        type="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        placeholder="Mínimo 6 caracteres"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Confirmar Senha *
+                      </label>
+                      <TextInput
+                        type="password"
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        placeholder="Repita a senha"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-end gap-4">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setShowModal(false);
-                    resetForm();
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting
-                    ? "Salvando..."
-                    : editingId
-                    ? "Salvar Alterações"
-                    : "Cadastrar"}
-                </Button>
-              </div>
-            </form>
-          </Modal>
+                <div className="border-t border-slate-200"></div>
+
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 mb-4">
+                    Informações Adicionais
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Endereço
+                      </label>
+                      <TextInput
+                        type="text"
+                        name="address"
+                        value={formData.address}
+                        onChange={handleChange}
+                        placeholder="Rua, número e complemento"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Cidade
+                      </label>
+                      <TextInput
+                        type="text"
+                        name="city"
+                        value={formData.city}
+                        onChange={handleChange}
+                        placeholder="São Paulo"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Estado
+                      </label>
+                      <TextInput
+                        type="text"
+                        name="state"
+                        value={formData.state}
+                        onChange={handleChange}
+                        placeholder="SP"
+                        maxLength={2}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-4">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setShowModal(false);
+                      resetForm();
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting
+                      ? "Salvando..."
+                      : editingId
+                      ? "Salvar Alterações"
+                      : "Cadastrar"}
+                  </Button>
+                </div>
+              </form>
+            </Modal>
+          </div>
         </div>
-      </div>
-    </MainLayout>
+      </MainLayout>
+    </RequireAuth>
   );
 }

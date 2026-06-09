@@ -65,6 +65,7 @@ export default function Sidebar() {
         {(
           [
             { icon: "📊", label: "Dashboard", href: "/dashboard" },
+            { icon: "🔄", label: "Fluxo", href: "/fluxo" },
             { icon: "💍", label: "Produtos", href: "/produtos" },
             { icon: "➕", label: "Cadastrar", href: "/cadastro" },
             { icon: "🎁", label: "Montar Kit", href: "/kit" },

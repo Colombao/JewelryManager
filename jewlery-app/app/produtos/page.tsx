@@ -1,6 +1,7 @@
 "use client";
 
 import MainLayout from "../components/MainLayout";
+import RequireAuth from "../components/RequireAuth";
 
 interface Product {
   id: number;
@@ -22,9 +23,11 @@ const availableProducts: Product[] = [
 
 export default function Produtos() {
   return (
-    <MainLayout>
-      <h1 className="text-2xl font-bold mb-4">Produtos</h1>
-      <p className="mb-4"></p>
-    </MainLayout>
+    <RequireAuth>
+      <MainLayout>
+        <h1 className="text-2xl font-bold mb-4">Produtos</h1>
+        <p className="mb-4"></p>
+      </MainLayout>
+    </RequireAuth>
   );
 }
