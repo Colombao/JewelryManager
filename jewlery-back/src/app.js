@@ -4,12 +4,17 @@ import "dotenv/config";
 import express from "express";
 import jwt from "jsonwebtoken";
 import prisma from "./database/prismaClient.js";
+import categoryRoutes from "./modules/category/category.route.js";
 import flowRoutes from "./modules/flow/flow.routes.js";
 import marketplaceRoutes from "./modules/marketplace/marketplace.routes.js";
+import platingRoutes from "./modules/plating/plating.route.js";
+import productsRoutes from "./modules/products/products.routes.js";
 import resellersRoutes from "./modules/resellers/resellers.routes.js";
+import supplierRoutes from "./modules/supplier/supplier.route.js";
 import trendsRoutes from "./modules/trends/trends.routes.js";
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
@@ -92,5 +97,9 @@ app.use("/trends", trendsRoutes);
 app.use("/marketplace", marketplaceRoutes);
 app.use("/resellers", resellersRoutes);
 app.use("/flow", flowRoutes);
+app.use("/suppliers", supplierRoutes);
+app.use("/categories", categoryRoutes);
+app.use("/platings", platingRoutes);
+app.use("/products", productsRoutes);
 
 export default app;

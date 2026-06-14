@@ -31,16 +31,101 @@ model Reseller {
   updatedAt DateTime @updatedAt
 }
 
-model Product {
-  id          Int      @id @default(autoincrement())
-  nome        String   @unique
-  descricao   String?  @db.Text
-  categoria   String
-  imagem      String?
-  preco       Float?
-  createdAt   DateTime @default(now())
+model Supplier {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  email     String?
+  phone     String?
 
-  trends      Trend[]
+  products  Product[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model ProductCategory {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+
+  products  Product[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model PlatingType {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+
+  products  Product[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Collection {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+
+  products  Product[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Product {
+  id             Int      @id @default(autoincrement())
+
+  // Identificação
+  code           String?  @db.VarChar(50)
+  sku            String?  @unique
+  reference      String?  @db.VarChar(100)
+  barcode        String?  @unique
+
+  // Informações básicas
+  name           String
+  description    String?  @db.Text
+  image          String?
+
+  // Relacionamentos
+  supplierId     Int?
+  supplier       Supplier? @relation(fields: [supplierId], references: [id])
+
+  categoryId     Int?
+  category       ProductCategory? @relation(fields: [categoryId], references: [id])
+
+  platingTypeId  Int?
+  platingType    PlatingType? @relation(fields: [platingTypeId], references: [id])
+
+  collectionId   Int?
+  collection     Collection? @relation(fields: [collectionId], references: [id])
+
+  // Estoque
+  quantity       Int       @default(0)
+  weight         Decimal?  @db.Decimal(10, 3)
+
+  // Custos
+  unitPrice      Decimal?  @db.Decimal(10, 2)
+  totalPrice     Decimal?  @db.Decimal(10, 2)
+
+  platingTotal   Decimal?  @db.Decimal(10, 2)
+  piecesTotal    Decimal?  @db.Decimal(10, 2)
+  grandTotal     Decimal?  @db.Decimal(10, 2)
+
+  // Tabelas de preço
+  priceLevel1    Decimal?  @db.Decimal(10, 2)
+  priceLevel2    Decimal?  @db.Decimal(10, 2)
+  priceLevel3    Decimal?  @db.Decimal(10, 2)
+
+  adjustedPrice  Decimal?  @db.Decimal(10, 2)
+
+  // Controle
+  active         Boolean   @default(true)
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  trends         Trend[]
 }
 
 model Trend {
