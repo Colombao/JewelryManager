@@ -208,14 +208,68 @@ async function reorderSteps(req, res) {
   }
 }
 
+async function updateStep(req, res) {
+  try {
+    const { stepId } = req.params;
+    const { name } = req.body;
+
+    if (!name) return res.status(400).json({ error: "name required" });
+
+    const updated = await prisma.step.update({
+      where: { id: Number(stepId) },
+      data: { name },
+    });
+
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+}
+
+async function deleteStep(req, res) {
+  try {
+    const { stepId } = req.params;
+
+    // Apaga cards ligados (se existir relação com onDelete cascade isso pode ser opcional)
+    await prisma.card.deleteMany({ where: { stepId: Number(stepId) } });
+
+    await prisma.step.delete({ where: { id: Number(stepId) } });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+}
+
+async function deleteBoard(req, res) {
+  try {
+    const { boardId } = req.params;
+    // Apaga steps e cards ligados (se existir relação com onDelete cascade isso pode ser opcional)
+    await prisma.card.deleteMany({
+      where: { step: { boardId: Number(boardId) } },
+    });
+    await prisma.step.deleteMany({ where: { boardId: Number(boardId) } });
+    await prisma.board.delete({ where: { id: Number(boardId) } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+}
+
 export {
   createBoard,
   createCard,
   createStep,
+  deleteBoard,
+  deleteStep,
   getBoard,
   getBoardById,
   getBoards,
   moveCard,
   reorderSteps,
   requireToken,
+  updateStep,
 };

@@ -13,11 +13,30 @@ export default function Modal({ open, title, onClose, children }: ModalProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-2xl md:max-w-3xl bg-white rounded-lg shadow-2xl p-6 mx-4 md:mx-6 mt-12 md:mt-0">
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center transition-all duration-300 ${
+        open ? "opacity-100 visible" : "opacity-0 invisible"
+      }`}
+    >
+      {/* Backdrop */}
+      <div
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${
+          open ? "opacity-100" : "opacity-0"
+        }`}
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div
+        className={`relative w-full max-w-2xl md:max-w-3xl bg-white rounded-lg shadow-2xl p-6 mx-4 md:mx-6 mt-12 md:mt-0 transition-all duration-300 ease-out ${
+          open
+            ? "opacity-100 scale-100 translate-y-0"
+            : "opacity-0 scale-95 translate-y-4"
+        }`}
+      >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
+
           <button
             onClick={onClose}
             aria-label="Fechar"
@@ -26,6 +45,7 @@ export default function Modal({ open, title, onClose, children }: ModalProps) {
             ✕
           </button>
         </div>
+
         <div className="max-h-[70vh] overflow-auto pr-2">{children}</div>
       </div>
     </div>

@@ -118,17 +118,54 @@ async function attemptScraping(attemptNumber) {
         await new Promise((r) => setTimeout(r, 3000));
 
         // Espera vários tipos de seletores possíveis
+        // Observação: Mercado Livre muda classes com frequência.
+        // Usamos waitForFunction para detectar a presença de itens no DOM.
         try {
+          console.log(`  ⏳ Esperando por itens no DOM...`, page);
           await Promise.race([
+            page.waitForFunction(
+              () =>
+                !!document.querySelector(".ui-search-result__content") ||
+                !!document.querySelector("[data-item-id]") ||
+                !!document.querySelector(".poly-card") ||
+                !!document.querySelector(".ui-search-result"),
+              { timeout: 12000 }
+            ),
             page.waitForSelector(".ui-search-result__content", {
-              timeout: 8000,
+              timeout: 12000,
             }),
-            page.waitForSelector("[data-item-id]", { timeout: 8000 }),
-            page.waitForSelector(".poly-card", { timeout: 8000 }),
-            page.waitForSelector(".ui-search-result", { timeout: 8000 }),
+            page.waitForSelector("[data-item-id]", { timeout: 12000 }),
           ]);
         } catch (e) {
-          console.log(`  ⚠️ Timeout ao esperar por seletores, continuando...`);
+          console.log(
+            `  ⚠️ Timeout ao esperar por seletores. Debug (term="${term}", tentativa=${attemptNumber})...`
+          );
+
+          try {
+            // garante que a pasta exista
+            const tmpDir = path.resolve(process.cwd(), "tmp");
+            if (!fs.existsSync(tmpDir)) {
+              fs.mkdirSync(tmpDir, { recursive: true });
+            }
+
+            const screenshotPath = path.join(
+              tmpDir,
+              `mercado-timeout-${attemptNumber}-${encodeURIComponent(term)}.png`
+            );
+
+            await page.screenshot({ path: screenshotPath, fullPage: true });
+            console.log(`  🖼️ Screenshot salva em: ${screenshotPath}`);
+          } catch (ssErr) {
+            console.log(`  ⚠️ Falha ao salvar screenshot: ${ssErr.message}`);
+          }
+
+          try {
+            const html = await page.content();
+            const snippet = html.slice(0, 3000);
+            console.log(`  🧾 HTML (prefixo 3000 chars):\n${snippet}`);
+          } catch (htmlErr) {
+            console.log(`  ⚠️ Falha ao capturar HTML: ${htmlErr.message}`);
+          }
         }
 
         // Scroll múltiplo para carregar itens

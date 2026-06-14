@@ -4,9 +4,14 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { FaPlus, FaToolbox, FaTrello } from "react-icons/fa";
+import { GoGraph } from "react-icons/go";
+import { IoIosSettings, IoMdPeople } from "react-icons/io";
+import { RiJewelryFill } from "react-icons/ri";
+import { SiGoogleanalytics } from "react-icons/si";
 
 interface NavItem {
-  icon: string;
+  icon: React.ReactNode;
   label: string;
   href: string;
   badge?: number;
@@ -64,14 +69,18 @@ export default function Sidebar() {
       <nav className="p-4 space-y-2">
         {(
           [
-            { icon: "📊", label: "Dashboard", href: "/dashboard" },
-            { icon: "🔄", label: "Fluxo", href: "/fluxo" },
-            { icon: "💍", label: "Produtos", href: "/produtos" },
-            { icon: "➕", label: "Cadastrar", href: "/cadastro" },
-            { icon: "🎁", label: "Montar Kit", href: "/kit" },
-            { icon: "👥", label: "Revendedores", href: "/usuarios" },
-            { icon: "📈", label: "Tendencias", href: "/tendencias" },
-            { icon: "📉", label: "Análise", href: "/analise" },
+            { icon: <FaTrello />, label: "Fluxo", href: "/fluxo" },
+            { icon: <RiJewelryFill />, label: "Produtos", href: "/produtos" },
+            { icon: <FaPlus />, label: "Cadastrar", href: "/cadastro" },
+            { icon: <FaToolbox />, label: "Montar Kit", href: "/kit" },
+            { icon: <IoMdPeople />, label: "Revendedores", href: "/usuarios" },
+            { icon: <GoGraph />, label: "Tendencias", href: "/tendencias" },
+            { icon: <SiGoogleanalytics />, label: "Análise", href: "/analise" },
+            {
+              icon: <IoIosSettings />,
+              label: "Configurações",
+              href: "/configuracoes",
+            },
           ] as NavItem[]
         ).map((item, index) => (
           <Link

@@ -37,7 +37,7 @@ export default function Home() {
       localStorage.setItem("authToken", data.token);
       localStorage.setItem("authUser", JSON.stringify(data.user));
 
-      router.push("/dashboard");
+      router.push("/fluxo");
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "Não foi possível entrar."
@@ -194,12 +194,12 @@ export default function Home() {
               </button>
             </form>
 
-            <div className="text-center mt-6 text-sm text-slate-400">
+            {/* <div className="text-center mt-6 text-sm text-slate-400">
               Esqueceu sua senha?{" "}
               <a href="#" className="text-blue-600 font-medium">
                 Redefinir senha
               </a>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

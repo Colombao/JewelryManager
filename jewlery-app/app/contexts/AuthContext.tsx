@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, ReactNode, useContext, useState } from "react";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 interface User {
   id: number;
@@ -23,15 +29,7 @@ interface AppAuthState {
   isLoading: boolean;
 }
 
-function initializeAuthState(): AppAuthState {
-  if (typeof window === "undefined") {
-    return {
-      user: null,
-      token: null,
-      isLoading: true,
-    };
-  }
-
+function getStoredAuthState(): { user: User | null; token: string | null } {
   const storedToken = localStorage.getItem("authToken");
   const storedUser = localStorage.getItem("authUser");
 
@@ -44,15 +42,39 @@ function initializeAuthState(): AppAuthState {
     }
   }
 
-  return {
-    user,
-    token: storedToken,
-    isLoading: false,
-  };
+  return { user, token: storedToken };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppAuthState>(initializeAuthState);
+  // Importante: estado inicial SEM localStorage para evitar mismatch SSR x Client
+  const [state, setState] = useState<AppAuthState>({
+    user: null,
+    token: null,
+    isLoading: true,
+  });
+
+  // Carrega token/usuário somente no cliente após hidratação
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const storedToken = localStorage.getItem("authToken");
+    const storedUser = localStorage.getItem("authUser");
+
+    // logs temporários pra diagnosticar hydration/auth
+    // eslint-disable-next-line no-console
+    console.log("[AuthContext] localStorage.authToken:", storedToken);
+    // eslint-disable-next-line no-console
+    console.log("[AuthContext] localStorage.authUser:", storedUser);
+
+    const { user, token } = getStoredAuthState();
+    setState({
+      user,
+      token,
+      isLoading: false,
+    });
+
+    // eslint-disable-next-line no-console
+    console.log("[AuthContext] state set => token:", token);
+  }, []);
 
   const logout = () => {
     setState({
