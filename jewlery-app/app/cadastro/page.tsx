@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import Button from "../components/Button";
 import MainLayout from "../components/MainLayout";
 import Modal from "../components/Modal";
 import RequireAuth from "../components/RequireAuth";
 import TextInput from "../components/TextInput";
+import {
+  IMPORT_ACCEPT,
+  ImportProductRow,
+  importProductsInBatches,
+  parseSpreadsheetFile,
+} from "./productImport";
 
 interface NamedItem {
   id: number;
@@ -106,6 +112,12 @@ export default function CadastroItem() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importPreview, setImportPreview] = useState<ImportProductRow[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ done: 0, total: 0 });
+  const [skipDuplicates, setSkipDuplicates] = useState(true);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -349,6 +361,61 @@ export default function CadastroItem() {
     }
   }
 
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    try {
+      const rows = await parseSpreadsheetFile(file);
+      if (rows.length === 0) {
+        toast.error("Nenhum produto válido encontrado na planilha");
+        return;
+      }
+      setImportPreview(rows);
+      setShowImportModal(true);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Erro ao ler planilha"
+      );
+    }
+  }
+
+  async function handleConfirmImport() {
+    if (importPreview.length === 0) return;
+
+    setIsImporting(true);
+    setImportProgress({ done: 0, total: importPreview.length });
+
+    try {
+      const data = await importProductsInBatches(
+        apiUrl,
+        importPreview,
+        skipDuplicates,
+        (done, total) => setImportProgress({ done, total })
+      );
+
+      const errorCount = data.errors.length;
+      toast.success(
+        `Importação concluída: ${data.created} criados, ${data.skipped} ignorados${
+          errorCount ? `, ${errorCount} com erro` : ""
+        }`
+      );
+
+      setShowImportModal(false);
+      setImportPreview([]);
+      setImportProgress({ done: 0, total: 0 });
+      await loadProducts();
+      await loadLookups();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Erro ao importar produtos"
+      );
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
   async function handleDelete(id: number) {
     const ok = confirm("Confirma exclusão deste produto?");
     if (!ok) return;
@@ -428,16 +495,32 @@ export default function CadastroItem() {
 
           <div className="flex items-center justify-between mb-6">
             <div />
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => {
-                resetForm();
-                setShowModal(true);
-              }}
-            >
-              Novo Produto
-            </Button>
+            <div className="flex items-center gap-3">
+              <input
+                ref={importInputRef}
+                type="file"
+                accept={IMPORT_ACCEPT}
+                className="hidden"
+                onChange={handleImportFile}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => importInputRef.current?.click()}
+              >
+                Importar Excel/CSV
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  resetForm();
+                  setShowModal(true);
+                }}
+              >
+                Novo Produto
+              </Button>
+            </div>
           </div>
 
           <div className="max-w-full">
@@ -719,6 +802,114 @@ export default function CadastroItem() {
                   </Button>
                 </div>
               </form>
+            </Modal>
+
+            <Modal
+              open={showImportModal}
+              size="2xl"
+              title="Importar produtos"
+              onClose={() => {
+                if (isImporting) return;
+                setShowImportModal(false);
+                setImportPreview([]);
+              }}
+            >
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  {importPreview.length} produto(s) prontos para importação.
+                  Fornecedores, categorias e tipos de banho serão criados
+                  automaticamente se não existirem.
+                </p>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={skipDuplicates}
+                    onChange={(e) => setSkipDuplicates(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  <span className="text-sm text-slate-700">
+                    Ignorar produtos com referência ou SKU já cadastrados
+                  </span>
+                </label>
+
+                <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-3 py-2">Código</th>
+                        <th className="px-3 py-2">Referência</th>
+                        <th className="px-3 py-2">Nome</th>
+                        <th className="px-3 py-2">Fornecedor</th>
+                        <th className="px-3 py-2">Qtd</th>
+                        <th className="px-3 py-2">Preço Unit.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.slice(0, 8).map((row, index) => (
+                        <tr key={`${row.reference}-${index}`} className="border-t">
+                          <td className="px-3 py-2">{row.code || "-"}</td>
+                          <td className="px-3 py-2">{row.reference || "-"}</td>
+                          <td className="px-3 py-2">{row.name}</td>
+                          <td className="px-3 py-2">{row.supplierName || "-"}</td>
+                          <td className="px-3 py-2">{row.quantity ?? 0}</td>
+                          <td className="px-3 py-2">{row.unitPrice ?? "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {importPreview.length > 8 && (
+                  <p className="text-xs text-slate-500">
+                    Exibindo 8 de {importPreview.length} linhas na prévia.
+                  </p>
+                )}
+
+                {isImporting && importProgress.total > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Enviando em lotes...</span>
+                      <span>
+                        {importProgress.done} / {importProgress.total}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 transition-all duration-300"
+                        style={{
+                          width: `${Math.round(
+                            (importProgress.done / importProgress.total) * 100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={isImporting}
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportPreview([]);
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={isImporting}
+                    onClick={handleConfirmImport}
+                  >
+                    {isImporting
+                      ? `Importando (${importProgress.done}/${importProgress.total})...`
+                      : "Confirmar importação"}
+                  </Button>
+                </div>
+              </div>
             </Modal>
           </div>
         </div>

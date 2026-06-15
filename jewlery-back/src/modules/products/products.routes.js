@@ -2,6 +2,7 @@ import express from "express";
 
 import {
   create,
+  importBulk,
   list,
   remove,
   update,
@@ -10,6 +11,7 @@ import {
 const router = express.Router();
 
 router.get("/", list);
+router.post("/import", importBulk);
 router.post("/", create);
 router.put("/:id", update);
 router.delete("/:id", remove);

@@ -1,4 +1,5 @@
 import prisma from "../../database/prismaClient.js";
+import { importProducts as runProductImport } from "./products.import.js";
 
 function toNumberOrNull(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -223,4 +224,27 @@ async function remove(req, res) {
   }
 }
 
-export { create, list, remove, update };
+async function importBulk(req, res) {
+  try {
+    const { items, skipDuplicates } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "items array required" });
+    }
+
+    if (items.length > 100) {
+      return res.status(400).json({ error: "maximum 100 items per batch" });
+    }
+
+    const result = await runProductImport(items, {
+      skipDuplicates: skipDuplicates !== false,
+    });
+
+    res.status(201).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+}
+
+export { create, importBulk, list, remove, update };
