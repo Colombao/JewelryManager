@@ -3,8 +3,11 @@ import cors from "cors";
 import "dotenv/config";
 import express from "express";
 import jwt from "jsonwebtoken";
+import path from "path";
+import { fileURLToPath } from "url";
 import prisma from "./database/prismaClient.js";
 import categoryRoutes from "./modules/category/category.route.js";
+import collectionRoutes from "./modules/collection/collection.route.js";
 import flowRoutes from "./modules/flow/flow.routes.js";
 import marketplaceRoutes from "./modules/marketplace/marketplace.routes.js";
 import platingRoutes from "./modules/plating/plating.route.js";
@@ -12,11 +15,15 @@ import productsRoutes from "./modules/products/products.routes.js";
 import resellersRoutes from "./modules/resellers/resellers.routes.js";
 import supplierRoutes from "./modules/supplier/supplier.route.js";
 import trendsRoutes from "./modules/trends/trends.routes.js";
+import uploadRoutes from "./modules/upload/upload.routes.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Register (optional helper route)
 app.post("/auth/register", async (req, res) => {
@@ -99,7 +106,9 @@ app.use("/resellers", resellersRoutes);
 app.use("/flow", flowRoutes);
 app.use("/suppliers", supplierRoutes);
 app.use("/categories", categoryRoutes);
+app.use("/collections", collectionRoutes);
 app.use("/platings", platingRoutes);
 app.use("/products", productsRoutes);
+app.use("/upload", uploadRoutes);
 
 export default app;
