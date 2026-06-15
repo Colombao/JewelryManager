@@ -6,10 +6,12 @@ import MainLayout from "../components/MainLayout";
 import RequireAuth from "../components/RequireAuth";
 import {
   addDays,
+  buildKitAutomatically,
   createLineFromProduct,
   createManualLine,
   formatBRL,
   formatDateInput,
+  getAvailableCategories,
   getCommissionLabel,
   getCommissionRate,
   groupItemsByCategory,
@@ -54,6 +56,8 @@ export default function MontarKit() {
   const [showCatalog, setShowCatalog] = useState(false);
   const [paymentType, setPaymentType] = useState<PaymentId>("avista");
   const [extraItems, setExtraItems] = useState({ showcase: 0, ringHolder: 0, boxes: 0 });
+  const [maxKitValue, setMaxKitValue] = useState(1600);
+  const [categoryQty, setCategoryQty] = useState<Record<string, number>>({});
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -90,6 +94,27 @@ export default function MontarKit() {
     return products.filter((p) => productMatchesSearch(p, term)).slice(0, 48);
   }, [products, search]);
 
+  const availableCategories = useMemo(
+    () => getAvailableCategories(products),
+    [products]
+  );
+
+  const autoRulesPreview = useMemo(
+    () =>
+      availableCategories
+        .filter((category) => (categoryQty[category] ?? 0) > 0)
+        .map((category) => ({
+          category,
+          quantity: categoryQty[category] ?? 0,
+        })),
+    [availableCategories, categoryQty]
+  );
+
+  const autoRequestedQty = useMemo(
+    () => autoRulesPreview.reduce((sum, rule) => sum + rule.quantity, 0),
+    [autoRulesPreview]
+  );
+
   const groups = useMemo(() => groupItemsByCategory(items), [items]);
 
   const productsSubtotal = useMemo(
@@ -114,6 +139,67 @@ export default function MontarKit() {
     PAYMENT_OPTIONS.find((p) => p.id === paymentType)?.discount ?? 0;
   const discountValue = grandTotal * paymentDiscount;
   const finalTotal = grandTotal - discountValue;
+
+  function toggleCategory(category: string, enabled: boolean) {
+    setCategoryQty((prev) => {
+      const next = { ...prev };
+      if (enabled) {
+        next[category] = prev[category] > 0 ? prev[category] : 1;
+      } else {
+        next[category] = 0;
+      }
+      return next;
+    });
+  }
+
+  function setCategoryQuantity(category: string, quantity: number) {
+    setCategoryQty((prev) => ({
+      ...prev,
+      [category]: Math.max(0, quantity),
+    }));
+  }
+
+  function handleAutoGenerate(replaceExisting: boolean) {
+    if (autoRulesPreview.length === 0) {
+      toast.error("Selecione pelo menos um tipo com quantidade");
+      return;
+    }
+
+    const result = buildKitAutomatically(
+      products,
+      autoRulesPreview,
+      maxKitValue
+    );
+
+    if (result.items.length === 0) {
+      toast.error(result.warnings[0] || "Não foi possível montar o kit");
+      return;
+    }
+
+    setItems((prev) =>
+      replaceExisting ? result.items : [...prev, ...result.items]
+    );
+
+    for (const warning of result.warnings) {
+      toast(warning, { icon: "⚠️" });
+    }
+
+    toast.success(
+      `Kit montado: ${result.items.length} peça(s) — ${formatBRL(result.total)}`
+    );
+  }
+
+  function handleAutoGenerateClick() {
+    if (items.length > 0) {
+      const replace = confirm(
+        "O kit já tem itens. OK = substituir tudo | Cancelar = adicionar aos existentes"
+      );
+      handleAutoGenerate(replace);
+      return;
+    }
+
+    handleAutoGenerate(true);
+  }
 
   function addProduct(product: Product) {
     setItems((prev) => [...prev, createLineFromProduct(product)]);
@@ -647,6 +733,104 @@ export default function MontarKit() {
 
               {/* Sidebar summary */}
               <div className="space-y-4">
+                <div className="no-print bg-white rounded-md shadow-sm border border-[#e8e8e8] p-5">
+                  <h3 className="text-sm font-semibold text-[#333] mb-1 uppercase tracking-wide">
+                    Montagem automática
+                  </h3>
+                  <p className="text-xs text-[#888] mb-4">
+                    Escolha os tipos, quantidades por tipo e o valor máximo. Depois
+                    ajuste livremente na tabela.
+                  </p>
+
+                  <div className="mb-4">
+                    <label className={labelClass}>Valor máximo do kit (R$)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={maxKitValue || ""}
+                      onChange={(e) =>
+                        setMaxKitValue(Math.max(0, parseFloat(e.target.value) || 0))
+                      }
+                      className={inputClass}
+                      placeholder="1600"
+                    />
+                  </div>
+
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className={labelClass}>Tipos de produto</label>
+                      <span className="text-[10px] text-[#999]">
+                        {autoRulesPreview.length} tipo(s) · {autoRequestedQty} peça(s)
+                      </span>
+                    </div>
+
+                    {isLoading ? (
+                      <p className="text-xs text-[#999]">Carregando categorias...</p>
+                    ) : availableCategories.length === 0 ? (
+                      <p className="text-xs text-[#999]">
+                        Nenhuma categoria encontrada nos produtos.
+                      </p>
+                    ) : (
+                      <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                        {availableCategories.map((category) => {
+                          const qty = categoryQty[category] ?? 0;
+                          const enabled = qty > 0;
+
+                          return (
+                            <div
+                              key={category}
+                              className={`flex items-center gap-2 p-2 rounded-sm border ${
+                                enabled
+                                  ? "border-[#b8860b] bg-[#faf8f5]"
+                                  : "border-[#eee]"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={enabled}
+                                onChange={(e) =>
+                                  toggleCategory(category, e.target.checked)
+                                }
+                                className="accent-[#b8860b]"
+                              />
+                              <span
+                                className="flex-1 text-xs text-[#333] leading-tight"
+                                title={category}
+                              >
+                                {category}
+                              </span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={enabled ? qty : ""}
+                                disabled={!enabled}
+                                onChange={(e) =>
+                                  setCategoryQuantity(
+                                    category,
+                                    parseInt(e.target.value, 10) || 0
+                                  )
+                                }
+                                className="w-14 px-1 py-1 text-center border border-[#ddd] rounded-sm text-xs disabled:bg-[#f5f5f5]"
+                                placeholder="Qtd"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAutoGenerateClick}
+                    disabled={isLoading || autoRulesPreview.length === 0}
+                    className="w-full px-4 py-2 text-sm font-medium rounded-sm bg-[#333] hover:bg-[#111] text-white disabled:opacity-50"
+                  >
+                    Montar kit automaticamente
+                  </button>
+                </div>
+
                 <div className="bg-white rounded-md shadow-sm border border-[#e8e8e8] p-5 sticky top-[72px]">
                   <h3 className="text-sm font-semibold text-[#333] mb-4 uppercase tracking-wide">
                     Resumo do kit

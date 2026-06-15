@@ -138,7 +138,7 @@ export function getCommissionLabel(total: number): string {
 
 export function createLineFromProduct(product: Product): KitLineItem {
   const reference = getProductReference(product);
-  const category = normalizeCategory(product.category?.name || product.name.split(" ")[0]);
+  const category = getProductCategory(product);
 
   return {
     id: `${product.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -198,4 +198,114 @@ export function productMatchesSearch(product: Product, term: string) {
     .toLowerCase();
 
   return haystack.includes(term);
+}
+
+export interface KitAutoRule {
+  category: string;
+  quantity: number;
+}
+
+export interface AutoKitResult {
+  items: KitLineItem[];
+  warnings: string[];
+  total: number;
+}
+
+export function getProductCategory(product: Product): string {
+  return normalizeCategory(
+    product.category?.name || product.name.split(" ")[0]
+  );
+}
+
+export function getAvailableCategories(products: Product[]): string[] {
+  const set = new Set<string>();
+  for (const product of products) {
+    set.add(getProductCategory(product));
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+export function productBelongsToCategory(
+  product: Product,
+  category: string
+): boolean {
+  return getProductCategory(product) === normalizeCategory(category);
+}
+
+export function buildKitAutomatically(
+  products: Product[],
+  rules: KitAutoRule[],
+  maxTotal: number
+): AutoKitResult {
+  const warnings: string[] = [];
+  const items: KitLineItem[] = [];
+  const usedProductIds = new Set<number>();
+  let currentTotal = 0;
+
+  const activeRules = rules.filter((rule) => rule.quantity > 0);
+  if (activeRules.length === 0) {
+    return {
+      items: [],
+      warnings: ["Selecione pelo menos uma categoria com quantidade."],
+      total: 0,
+    };
+  }
+
+  if (maxTotal <= 0) {
+    return {
+      items: [],
+      warnings: ["Informe um valor máximo válido para o kit."],
+      total: 0,
+    };
+  }
+
+  const activeProducts = products.filter(
+    (product) => product.active && getDisplayPrice(product) > 0
+  );
+
+  for (const rule of activeRules) {
+    const categoryKey = normalizeCategory(rule.category);
+    const allInCategory = activeProducts.filter(
+      (product) =>
+        !usedProductIds.has(product.id) &&
+        productBelongsToCategory(product, categoryKey)
+    );
+
+    const inStock = allInCategory.filter((product) => product.quantity > 0);
+    const candidates = (
+      inStock.length >= rule.quantity ? inStock : allInCategory
+    ).sort((a, b) => getDisplayPrice(a) - getDisplayPrice(b));
+
+    let picked = 0;
+
+    for (const product of candidates) {
+      if (picked >= rule.quantity) break;
+
+      const price = getDisplayPrice(product);
+      if (currentTotal + price > maxTotal) continue;
+
+      items.push(createLineFromProduct(product));
+      usedProductIds.add(product.id);
+      currentTotal += price;
+      picked++;
+    }
+
+    if (picked < rule.quantity) {
+      const reason =
+        candidates.length === 0
+          ? "sem produtos disponíveis"
+          : "valor máximo ou estoque insuficiente";
+      warnings.push(
+        `${categoryKey}: ${picked} de ${rule.quantity} peças (${reason})`
+      );
+    }
+  }
+
+  if (items.length === 0) {
+    warnings.push(
+      "Nenhum produto coube no valor máximo. Tente aumentar o limite ou reduzir as quantidades."
+    );
+  }
+
+  return { items, warnings, total: currentTotal };
 }
