@@ -25,6 +25,33 @@ type Card = {
   description?: string | null;
   order: number;
   stepId: number;
+  kitId?: number | null;
+  resellerId?: number | null;
+  kit?: {
+    id: number;
+    kitNumber: number;
+    totalQty: number;
+    grandTotal: string | number;
+  } | null;
+  reseller?: {
+    id: number;
+    name: string;
+  } | null;
+};
+
+type AvailableKit = {
+  id: number;
+  kitNumber: number;
+  totalQty: number;
+  grandTotal: string | number;
+  finalTotal: string | number;
+  _count: { items: number };
+};
+
+type ResellerOption = {
+  id: number;
+  name: string;
+  cpf: string;
 };
 
 type Board = {
@@ -63,10 +90,119 @@ export default function FluxoPage() {
   const [openModalEditStep, setOpenModalEditStep] = useState(false);
   const [editingStep, setEditingStep] = useState<Step | null>(null);
 
+  const [createBusinessOpen, setCreateBusinessOpen] = useState(false);
+  const [availableKits, setAvailableKits] = useState<AvailableKit[]>([]);
+  const [resellers, setResellers] = useState<ResellerOption[]>([]);
+  const [selectedKitId, setSelectedKitId] = useState("");
+  const [selectedResellerId, setSelectedResellerId] = useState("");
+  const [loadingBusinessData, setLoadingBusinessData] = useState(false);
+  const [creatingBusiness, setCreatingBusiness] = useState(false);
+
+  const authHeader = useMemo(
+    () => ({
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("authToken") ?? "" : ""}`,
+    }),
+    []
+  );
+
   const columns = useMemo(() => {
     if (!board) return [] as Step[];
     return [...board.steps].sort((a, b) => a.order - b.order);
   }, [board]);
+
+  const firstStep = columns[0] ?? null;
+
+  function formatKitMoney(value: string | number) {
+    const n = typeof value === "string" ? parseFloat(value) : value;
+    if (!Number.isFinite(n)) return "—";
+    return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  }
+
+  async function reloadBoard() {
+    if (!board) return;
+    const res = await fetch(`${apiUrl}/flow/board/${board.id}`, {
+      headers: authHeader,
+    });
+    if (!res.ok) throw new Error("Erro ao recarregar board");
+    const data = await res.json();
+    setBoard(data);
+  }
+
+  async function openCreateBusinessModal() {
+    if (!board) {
+      toast.error("Selecione um board primeiro");
+      return;
+    }
+    if (!firstStep) {
+      toast.error("Crie uma etapa no board antes de abrir um negócio");
+      return;
+    }
+
+    setCreateBusinessOpen(true);
+    setSelectedKitId("");
+    setSelectedResellerId("");
+    setLoadingBusinessData(true);
+
+    try {
+      const [kitsRes, resellersRes] = await Promise.all([
+        fetch(`${apiUrl}/kits/available`),
+        fetch(`${apiUrl}/resellers`),
+      ]);
+
+      if (kitsRes.ok) setAvailableKits(await kitsRes.json());
+      else setAvailableKits([]);
+
+      if (resellersRes.ok) setResellers(await resellersRes.json());
+      else setResellers([]);
+    } catch {
+      toast.error("Erro ao carregar kits e revendedoras");
+    } finally {
+      setLoadingBusinessData(false);
+    }
+  }
+
+  async function handleCreateBusiness() {
+    if (!board || !firstStep) return;
+
+    if (!selectedKitId) {
+      toast.error("Selecione um kit montado");
+      return;
+    }
+
+    if (!selectedResellerId) {
+      toast.error("Selecione uma revendedora");
+      return;
+    }
+
+    setCreatingBusiness(true);
+    try {
+      const res = await fetch(`${apiUrl}/flow/business`, {
+        method: "POST",
+        headers: authHeader,
+        body: JSON.stringify({
+          kitId: Number(selectedKitId),
+          resellerId: Number(selectedResellerId),
+          boardId: board.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Erro ao criar negócio");
+      }
+
+      await reloadBoard();
+      toast.success("Negócio criado na primeira etapa");
+      setCreateBusinessOpen(false);
+      setSelectedKitId("");
+      setSelectedResellerId("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar negócio");
+    } finally {
+      setCreatingBusiness(false);
+    }
+  }
 
   const cardsByStep = useMemo(() => {
     if (!board) return new Map<number, Card[]>();
@@ -350,6 +486,15 @@ export default function FluxoPage() {
                     placeholder="Selecione um board"
                   />
                 </div>
+                <button
+                  onClick={openCreateBusinessModal}
+                  disabled={!board || !firstStep}
+                  className={`px-4 py-2 rounded-lg bg-[#b8860b] hover:bg-[#9a7209] transition text-white text-sm font-medium ${
+                    !board || !firstStep ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                >
+                  Criar negócio
+                </button>
                 <button
                   onClick={() => setCreateBoardOpen(true)}
                   className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition text-white text-sm font-medium"
@@ -642,6 +787,11 @@ export default function FluxoPage() {
                         <div className="text-sm font-semibold text-slate-900">
                           {c.title}
                         </div>
+                        {c.reseller?.name && (
+                          <div className="text-[11px] text-[#b8860b] mt-1 font-medium">
+                            {c.reseller.name}
+                          </div>
+                        )}
                         {c.description ? (
                           <div className="text-xs text-slate-500 mt-1 line-clamp-2">
                             {c.description}
@@ -929,6 +1079,96 @@ export default function FluxoPage() {
                   className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition text-white text-sm font-medium"
                 >
                   Salvar
+                </button>
+              </div>
+            </div>
+          </Modal>
+
+          <Modal
+            open={createBusinessOpen}
+            title="Criar negócio"
+            onClose={() => {
+              setCreateBusinessOpen(false);
+              setSelectedKitId("");
+              setSelectedResellerId("");
+            }}
+          >
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">
+                Vincule um kit montado a uma revendedora. O card será criado na
+                primeira etapa{firstStep ? `: ${firstStep.name}` : ""}.
+              </p>
+
+              {loadingBusinessData ? (
+                <p className="text-sm text-slate-500">Carregando opções...</p>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">
+                      Kit montado
+                    </label>
+                    <select
+                      value={selectedKitId}
+                      onChange={(e) => setSelectedKitId(e.target.value)}
+                      className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-black"
+                    >
+                      <option value="">Selecione um kit...</option>
+                      {availableKits.map((kit) => (
+                        <option key={kit.id} value={kit.id}>
+                          Kit {kit.kitNumber} — {kit.totalQty} peças —{" "}
+                          {formatKitMoney(kit.grandTotal)}
+                        </option>
+                      ))}
+                    </select>
+                    {availableKits.length === 0 && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        Nenhum kit disponível. Monte um kit em Montar Kit primeiro.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">
+                      Revendedora
+                    </label>
+                    <select
+                      value={selectedResellerId}
+                      onChange={(e) => setSelectedResellerId(e.target.value)}
+                      className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-black"
+                    >
+                      <option value="">Selecione uma revendedora...</option>
+                      {resellers.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} — {r.cpf}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    setCreateBusinessOpen(false);
+                    setSelectedKitId("");
+                    setSelectedResellerId("");
+                  }}
+                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition text-slate-800 text-sm font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateBusiness}
+                  disabled={
+                    creatingBusiness ||
+                    loadingBusinessData ||
+                    !selectedKitId ||
+                    !selectedResellerId
+                  }
+                  className="px-4 py-2 rounded-lg bg-[#b8860b] hover:bg-[#9a7209] transition text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {creatingBusiness ? "Criando..." : "Criar negócio"}
                 </button>
               </div>
             </div>

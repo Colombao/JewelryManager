@@ -9,6 +9,7 @@ import prisma from "./database/prismaClient.js";
 import categoryRoutes from "./modules/category/category.route.js";
 import collectionRoutes from "./modules/collection/collection.route.js";
 import flowRoutes from "./modules/flow/flow.routes.js";
+import kitsRoutes from "./modules/kits/kits.routes.js";
 import marketplaceRoutes from "./modules/marketplace/marketplace.routes.js";
 import platingRoutes from "./modules/plating/plating.route.js";
 import productsRoutes from "./modules/products/products.routes.js";
@@ -109,6 +110,7 @@ app.use("/categories", categoryRoutes);
 app.use("/collections", collectionRoutes);
 app.use("/platings", platingRoutes);
 app.use("/products", productsRoutes);
+app.use("/kits", kitsRoutes);
 app.use("/upload", uploadRoutes);
 
 export default app;

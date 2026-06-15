@@ -28,6 +28,22 @@ function boardToResponse(board) {
       description: c.description,
       order: c.order,
       stepId: c.stepId,
+      kitId: c.kitId,
+      resellerId: c.resellerId,
+      kit: c.kit
+        ? {
+            id: c.kit.id,
+            kitNumber: c.kit.kitNumber,
+            totalQty: c.kit.totalQty,
+            grandTotal: c.kit.grandTotal,
+          }
+        : null,
+      reseller: c.reseller
+        ? {
+            id: c.reseller.id,
+            name: c.reseller.name,
+          }
+        : null,
     }))
     .sort((a, b) => a.order - b.order);
 
@@ -38,6 +54,28 @@ function boardToResponse(board) {
     cards,
   };
 }
+
+const boardInclude = {
+  steps: true,
+  cards: {
+    include: {
+      kit: {
+        select: {
+          id: true,
+          kitNumber: true,
+          totalQty: true,
+          grandTotal: true,
+        },
+      },
+      reseller: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  },
+};
 
 async function getBoards(req, res) {
   try {
@@ -62,7 +100,7 @@ async function getBoardById(req, res) {
     const { boardId } = req.params;
     const board = await prisma.board.findUnique({
       where: { id: Number(boardId) },
-      include: { steps: true, cards: true },
+      include: boardInclude,
     });
 
     if (!board) return res.status(404).json({ error: "board not found" });
@@ -79,7 +117,7 @@ async function getBoard(req, res) {
   try {
     const board = await prisma.board.findFirst({
       where: { active: true },
-      include: { steps: true, cards: true },
+      include: boardInclude,
     });
 
     if (!board) return res.status(404).json({ error: "board not found" });
@@ -134,9 +172,17 @@ async function createCard(req, res) {
     if (!stepId || !title)
       return res.status(400).json({ error: "stepId and title required" });
 
+    const step = await prisma.step.findUnique({
+      where: { id: Number(stepId) },
+      select: { boardId: true },
+    });
+
+    if (!step) return res.status(404).json({ error: "step not found" });
+
     const card = await prisma.card.create({
       data: {
         stepId: Number(stepId),
+        boardId: step.boardId,
         title,
         description: description ?? null,
         order: typeof order === "number" ? order : undefined,
@@ -144,6 +190,127 @@ async function createCard(req, res) {
     });
 
     res.status(201).json(card);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+}
+
+async function createBusiness(req, res) {
+  try {
+    const { kitId, resellerId, boardId } = req.body;
+
+    if (!kitId || !resellerId) {
+      return res
+        .status(400)
+        .json({ error: "kitId e resellerId são obrigatórios" });
+    }
+
+    const kit = await prisma.kit.findUnique({
+      where: { id: Number(kitId) },
+      include: { card: true },
+    });
+
+    if (!kit) {
+      return res.status(404).json({ error: "Kit não encontrado" });
+    }
+
+    if (kit.card) {
+      return res
+        .status(409)
+        .json({ error: "Este kit já está vinculado a um negócio" });
+    }
+
+    const reseller = await prisma.reseller.findUnique({
+      where: { id: Number(resellerId) },
+    });
+
+    if (!reseller) {
+      return res.status(404).json({ error: "Revendedora não encontrada" });
+    }
+
+    const board = boardId
+      ? await prisma.board.findUnique({
+          where: { id: Number(boardId) },
+          include: { steps: true },
+        })
+      : await prisma.board.findFirst({
+          where: { active: true },
+          include: { steps: true },
+        });
+
+    if (!board) {
+      return res.status(404).json({ error: "Board não encontrado" });
+    }
+
+    const firstStep = [...board.steps].sort((a, b) => a.order - b.order)[0];
+
+    if (!firstStep) {
+      return res.status(400).json({
+        error: "Board sem etapas. Crie uma etapa antes de abrir um negócio.",
+      });
+    }
+
+    const cardsInStep = await prisma.card.count({
+      where: { stepId: firstStep.id },
+    });
+
+    const clientCity = [reseller.city, reseller.state]
+      .filter(Boolean)
+      .join(" - ");
+
+    const description = `${kit.totalQty} peças · Total ${Number(kit.grandTotal).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    })}`;
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.kit.update({
+        where: { id: kit.id },
+        data: {
+          status: "vinculado",
+          resellerId: reseller.id,
+          clientName: reseller.name,
+          clientAddress: reseller.address,
+          clientCity: clientCity || null,
+          clientCpf: reseller.cpf,
+          clientPhone: reseller.phone,
+          clientEmail: reseller.email,
+        },
+      });
+
+      const card = await tx.card.create({
+        data: {
+          stepId: firstStep.id,
+          boardId: board.id,
+          title: `Kit ${kit.kitNumber} — ${reseller.name}`,
+          description,
+          order: cardsInStep,
+          kitId: kit.id,
+          resellerId: reseller.id,
+        },
+        include: {
+          kit: {
+            select: {
+              id: true,
+              kitNumber: true,
+              totalQty: true,
+              grandTotal: true,
+            },
+          },
+          reseller: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      return card;
+    });
+
+    res.status(201).json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "internal error" });
@@ -196,7 +363,7 @@ async function reorderSteps(req, res) {
 
     const board = await prisma.board.findUnique({
       where: { id: Number(boardId) },
-      include: { steps: true, cards: true },
+      include: boardInclude,
     });
 
     if (!board) return res.status(404).json({ error: "board not found" });
@@ -261,6 +428,7 @@ async function deleteBoard(req, res) {
 
 export {
   createBoard,
+  createBusiness,
   createCard,
   createStep,
   deleteBoard,

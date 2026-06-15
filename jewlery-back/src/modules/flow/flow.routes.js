@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createBoard,
+  createBusiness,
   createCard,
   createStep,
   deleteBoard,
@@ -30,6 +31,7 @@ router.post("/steps/reorder", reorderSteps);
 router.put("/steps/:stepId", updateStep);
 router.delete("/steps/:stepId", deleteStep);
 router.post("/cards", createCard);
+router.post("/business", createBusiness);
 router.post("/cards/:cardId/move", moveCard);
 
 export default router;
