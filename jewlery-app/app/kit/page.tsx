@@ -2,11 +2,14 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import MainLayout from "../components/MainLayout";
 import RequireAuth from "../components/RequireAuth";
 import {
   addDays,
   buildKitAutomatically,
+  createLineFromKitItem,
   createLineFromProduct,
   createManualLine,
   formatBRL,
@@ -17,6 +20,7 @@ import {
   groupItemsByCategory,
   lineTotal,
   fetchNextKitNumber,
+  parseApiDateInput,
   Product,
   KitLineItem,
   productMatchesSearch,
@@ -36,10 +40,12 @@ const inputClass =
 const labelClass = "block text-xs font-semibold text-[#666] uppercase tracking-wide mb-1";
 
 export default function MontarKit() {
+  const router = useRouter();
   const searchRef = useRef<HTMLInputElement>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingKitId, setEditingKitId] = useState<number | null>(null);
 
   const [kitNumber, setKitNumber] = useState(11);
   const [issueDate, setIssueDate] = useState(formatDateInput(new Date()));
@@ -65,21 +71,53 @@ export default function MontarKit() {
     async function loadData() {
       try {
         setIsLoading(true);
-        const [productsRes, kitNumberRes] = await Promise.all([
-          fetch(`${apiUrl}/products?active=true`),
-          fetch(`${apiUrl}/kits/next-number`),
-        ]);
 
+        const editParam =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("edit")
+            : null;
+        const editId = editParam ? parseInt(editParam, 10) : NaN;
+        const isEditing = Number.isFinite(editId) && editId > 0;
+
+        const productsRes = await fetch(`${apiUrl}/products?active=true`);
         if (productsRes.ok) setProducts(await productsRes.json());
-        if (kitNumberRes.ok) {
-          const data = await kitNumberRes.json();
-          setKitNumber(data.kitNumber);
+
+        if (isEditing) {
+          const kitRes = await fetch(`${apiUrl}/kits/${editId}`);
+          if (!kitRes.ok) throw new Error("Kit não encontrado");
+
+          const kit = await kitRes.json();
+          setEditingKitId(kit.id);
+          setKitNumber(kit.kitNumber);
+          setIssueDate(parseApiDateInput(kit.issueDate));
+          setReturnDate(parseApiDateInput(kit.returnDate));
+          setNature(kit.nature || "Venda");
+          setObservations(kit.observations || "");
+          setPaymentType(kit.paymentType === "prazo" ? "prazo" : "avista");
+          setExtraItems({
+            showcase: parseFloat(String(kit.extrasShowcase)) || 0,
+            ringHolder: parseFloat(String(kit.extrasRingHolder)) || 0,
+            boxes: kit.extrasBoxes || 0,
+          });
+          setItems(
+            (kit.items ?? []).map((item: Parameters<typeof createLineFromKitItem>[0]) =>
+              createLineFromKitItem(item)
+            )
+          );
         } else {
-          const next = await fetchNextKitNumber(apiUrl);
-          setKitNumber(next);
+          const kitNumberRes = await fetch(`${apiUrl}/kits/next-number`);
+          if (kitNumberRes.ok) {
+            const data = await kitNumberRes.json();
+            setKitNumber(data.kitNumber);
+          } else {
+            const next = await fetchNextKitNumber(apiUrl);
+            setKitNumber(next);
+          }
         }
-      } catch {
-        toast.error("Erro ao carregar dados do kit");
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Erro ao carregar dados do kit"
+        );
       } finally {
         setIsLoading(false);
       }
@@ -297,8 +335,13 @@ export default function MontarKit() {
         },
       };
 
-      const res = await fetch(`${apiUrl}/kits`, {
-        method: "POST",
+      const url = editingKitId
+        ? `${apiUrl}/kits/${editingKitId}`
+        : `${apiUrl}/kits`;
+      const method = editingKitId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -306,10 +349,22 @@ export default function MontarKit() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error || "Erro ao salvar kit");
+        throw new Error(
+          data?.error ||
+            (editingKitId ? "Erro ao atualizar kit" : "Erro ao salvar kit")
+        );
       }
 
-      toast.success(`Kit ${data.kitNumber} salvo com sucesso!`);
+      toast.success(
+        editingKitId
+          ? `Kit ${data.kitNumber} atualizado com sucesso!`
+          : `Kit ${data.kitNumber} salvo com sucesso!`
+      );
+
+      if (editingKitId) {
+        router.push("/kits");
+        return;
+      }
 
       const nextNumber = await fetchNextKitNumber(apiUrl);
       setKitNumber(nextNumber);
@@ -351,12 +406,24 @@ export default function MontarKit() {
           {/* Toolbar */}
           <div className="no-print sticky top-0 z-20 bg-white border-b border-[#e0e0e0] px-6 py-3 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold text-[#222]">Montar Kit</h1>
+              <h1 className="text-xl font-semibold text-[#222]">
+                {editingKitId ? `Editar Kit #${kitNumber}` : "Montar Kit"}
+              </h1>
               <p className="text-sm text-[#666]">
-                Monte o kit com os produtos — a revendedora é vinculada depois no Fluxo
+                {editingKitId
+                  ? "Altere os itens e salve — a revendedora continua vinculada no Fluxo"
+                  : "Monte o kit com os produtos — a revendedora é vinculada depois no Fluxo"}
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {editingKitId && (
+                <Link
+                  href="/kits"
+                  className="px-4 py-2 text-sm border border-[#d9d9d9] rounded-sm hover:bg-[#fafafa] text-[#333]"
+                >
+                  Voltar
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={() => setShowCatalog((v) => !v)}
@@ -377,7 +444,11 @@ export default function MontarKit() {
                 disabled={isSaving}
                 className="px-5 py-2 text-sm font-medium rounded-sm bg-[#b8860b] hover:bg-[#9a7209] text-white disabled:opacity-60"
               >
-                {isSaving ? "Salvando..." : "Salvar kit"}
+                {isSaving
+                  ? "Salvando..."
+                  : editingKitId
+                  ? "Salvar alterações"
+                  : "Salvar kit"}
               </button>
             </div>
           </div>

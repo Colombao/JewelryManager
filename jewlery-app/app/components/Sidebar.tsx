@@ -4,7 +4,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { FaPlus, FaToolbox, FaTrello } from "react-icons/fa";
+import { FaClipboardList, FaPlus, FaToolbox, FaTrello } from "react-icons/fa";
 import { GoGraph } from "react-icons/go";
 import { IoIosSettings, IoMdPeople } from "react-icons/io";
 import { RiJewelryFill } from "react-icons/ri";
@@ -73,6 +73,7 @@ export default function Sidebar() {
             { icon: <RiJewelryFill />, label: "Produtos", href: "/produtos" },
             { icon: <FaPlus />, label: "Cadastrar", href: "/cadastro" },
             { icon: <FaToolbox />, label: "Montar Kit", href: "/kit" },
+            { icon: <FaClipboardList />, label: "Kits Montados", href: "/kits" },
             { icon: <IoMdPeople />, label: "Revendedores", href: "/usuarios" },
             { icon: <GoGraph />, label: "Tendencias", href: "/tendencias" },
             { icon: <SiGoogleanalytics />, label: "Análise", href: "/analise" },

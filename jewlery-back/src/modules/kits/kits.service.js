@@ -48,6 +48,58 @@ function kitInclude() {
   };
 }
 
+function prepareKitItems(items) {
+  return items.map((item, index) => {
+    const quantity = Math.max(1, toInt(item.quantity, 1));
+    const unitPrice = toNumber(item.unitPrice, 0);
+
+    return {
+      productId: item.productId ? toInt(item.productId) : null,
+      reference: String(item.reference || "").trim().toUpperCase(),
+      description: String(item.description || item.reference || "Item").trim(),
+      category: String(item.category || "OUTROS").trim().toUpperCase(),
+      quantity,
+      unitPrice: toDecimal(unitPrice),
+      lineTotal: toDecimal(quantity * unitPrice),
+      sortOrder: index,
+    };
+  });
+}
+
+function buildKitData(payload) {
+  const {
+    nature,
+    issueDate,
+    returnDate,
+    paymentTerms,
+    paymentType,
+    observations,
+    extras = {},
+    totals = {},
+  } = payload;
+
+  return {
+    nature: nature?.trim() || "Venda",
+    issueDate: parseDate(issueDate),
+    returnDate: parseDate(returnDate),
+    paymentTerms: paymentTerms?.trim() || null,
+    paymentType: paymentType || "avista",
+    observations: observations?.trim() || null,
+    extrasShowcase: toDecimal(extras.showcase ?? 0),
+    extrasRingHolder: toDecimal(extras.ringHolder ?? 0),
+    extrasBoxes: toInt(extras.boxes ?? 0),
+    totalQty: toInt(totals.totalQty ?? 0),
+    productsSubtotal: toDecimal(totals.productsSubtotal ?? 0),
+    extrasTotal: toDecimal(totals.extrasTotal ?? 0),
+    grandTotal: toDecimal(totals.grandTotal ?? 0),
+    commissionRate: toDecimal(totals.commissionRate ?? 0),
+    commissionValue: toDecimal(totals.commissionValue ?? 0),
+    paymentDiscount: toDecimal(totals.paymentDiscount ?? 0),
+    discountValue: toDecimal(totals.discountValue ?? 0),
+    finalTotal: toDecimal(totals.finalTotal ?? 0),
+  };
+}
+
 export const kitsService = {
   async getNextNumber() {
     const last = await prisma.kit.findFirst({
@@ -142,44 +194,15 @@ export const kitsService = {
       throw new Error(`Kit número ${nextNumber} já existe`);
     }
 
-    const preparedItems = items.map((item, index) => {
-      const quantity = Math.max(1, toInt(item.quantity, 1));
-      const unitPrice = toNumber(item.unitPrice, 0);
+    const preparedItems = prepareKitItems(items);
 
-      return {
-        productId: item.productId ? toInt(item.productId) : null,
-        reference: String(item.reference || "").trim().toUpperCase(),
-        description: String(item.description || item.reference || "Item").trim(),
-        category: String(item.category || "OUTROS").trim().toUpperCase(),
-        quantity,
-        unitPrice: toDecimal(unitPrice),
-        lineTotal: toDecimal(quantity * unitPrice),
-        sortOrder: index,
-      };
-    });
+    const kitData = buildKitData(payload);
 
     const created = await prisma.kit.create({
       data: {
         kitNumber: nextNumber,
-        nature: nature?.trim() || "Venda",
-        issueDate: parsedIssueDate,
-        returnDate: parsedReturnDate,
-        paymentTerms: paymentTerms?.trim() || null,
-        paymentType: paymentType || "avista",
-        observations: observations?.trim() || null,
         status: "montado",
-        extrasShowcase: toDecimal(extras.showcase ?? 0),
-        extrasRingHolder: toDecimal(extras.ringHolder ?? 0),
-        extrasBoxes: toInt(extras.boxes ?? 0),
-        totalQty: toInt(totals.totalQty ?? 0),
-        productsSubtotal: toDecimal(totals.productsSubtotal ?? 0),
-        extrasTotal: toDecimal(totals.extrasTotal ?? 0),
-        grandTotal: toDecimal(totals.grandTotal ?? 0),
-        commissionRate: toDecimal(totals.commissionRate ?? 0),
-        commissionValue: toDecimal(totals.commissionValue ?? 0),
-        paymentDiscount: toDecimal(totals.paymentDiscount ?? 0),
-        discountValue: toDecimal(totals.discountValue ?? 0),
-        finalTotal: toDecimal(totals.finalTotal ?? 0),
+        ...kitData,
         items: {
           create: preparedItems,
         },
@@ -188,6 +211,69 @@ export const kitsService = {
     });
 
     return created;
+  },
+
+  async update(id, payload) {
+    const {
+      nature,
+      issueDate,
+      returnDate,
+      paymentTerms,
+      paymentType,
+      observations,
+      items = [],
+      extras = {},
+      totals = {},
+    } = payload;
+
+    const existing = await prisma.kit.findUnique({ where: { id } });
+    if (!existing) {
+      throw new Error("Kit não encontrado");
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error("Adicione pelo menos um item ao kit");
+    }
+
+    const kitData = buildKitData(payload);
+
+    if (!kitData.issueDate || !kitData.returnDate) {
+      throw new Error("Datas de emissão e devolução são obrigatórias");
+    }
+
+    const preparedItems = prepareKitItems(items);
+
+    return prisma.$transaction(async (tx) => {
+      await tx.kitItem.deleteMany({ where: { kitId: id } });
+
+      return tx.kit.update({
+        where: { id },
+        data: {
+          nature: kitData.nature,
+          issueDate: kitData.issueDate,
+          returnDate: kitData.returnDate,
+          paymentTerms: kitData.paymentTerms,
+          paymentType: kitData.paymentType,
+          observations: kitData.observations,
+          extrasShowcase: kitData.extrasShowcase,
+          extrasRingHolder: kitData.extrasRingHolder,
+          extrasBoxes: kitData.extrasBoxes,
+          totalQty: kitData.totalQty,
+          productsSubtotal: kitData.productsSubtotal,
+          extrasTotal: kitData.extrasTotal,
+          grandTotal: kitData.grandTotal,
+          commissionRate: kitData.commissionRate,
+          commissionValue: kitData.commissionValue,
+          paymentDiscount: kitData.paymentDiscount,
+          discountValue: kitData.discountValue,
+          finalTotal: kitData.finalTotal,
+          items: {
+            create: preparedItems,
+          },
+        },
+        include: kitInclude(),
+      });
+    });
   },
 
   async remove(id) {

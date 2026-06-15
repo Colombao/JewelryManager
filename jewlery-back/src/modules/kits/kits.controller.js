@@ -70,6 +70,30 @@ export async function createKit(req, res) {
   }
 }
 
+export async function updateKit(req, res) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const kit = await kitsService.update(id, req.body);
+    return res.json(kit);
+  } catch (err) {
+    console.error(err);
+
+    if (err.message.includes("não encontrado")) {
+      return res.status(404).json({ error: err.message });
+    }
+
+    if (
+      err.message.includes("obrigatório") ||
+      err.message.includes("Adicione") ||
+      err.message.includes("Datas")
+    ) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    return res.status(500).json({ error: err.message });
+  }
+}
+
 export async function deleteKit(req, res) {
   try {
     const id = parseInt(req.params.id, 10);

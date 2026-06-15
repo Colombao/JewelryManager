@@ -151,6 +151,37 @@ export function createLineFromProduct(product: Product): KitLineItem {
   };
 }
 
+export function createLineFromKitItem(item: {
+  id: number;
+  productId?: number | null;
+  reference: string;
+  description: string;
+  category: string;
+  quantity: number;
+  unitPrice: string | number;
+}): KitLineItem {
+  const unit =
+    typeof item.unitPrice === "number"
+      ? item.unitPrice
+      : parsePrice(String(item.unitPrice)) ?? 0;
+
+  return {
+    id: `kit-item-${item.id}-${Math.random().toString(36).slice(2, 6)}`,
+    productId: item.productId ?? null,
+    reference: item.reference,
+    description: item.description,
+    category: normalizeCategory(item.category),
+    quantity: item.quantity,
+    unitPrice: unit,
+  };
+}
+
+export function parseApiDateInput(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return formatDateInput(new Date());
+  return formatDateInput(date);
+}
+
 export function createManualLine(
   reference: string,
   description: string,
