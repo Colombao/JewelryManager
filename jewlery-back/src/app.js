@@ -16,13 +16,37 @@ import supplierRoutes from "./modules/supplier/supplier.route.js";
 import trendsRoutes from "./modules/trends/trends.routes.js";
 import uploadRoutes from "./modules/upload/upload.routes.js";
 import { ensureUploadDirectories, uploadRoot } from "./config/uploads.js";
+import { getCorsOptions, isAllowedOrigin } from "./config/cors.js";
 
 const app = express();
 
 ensureUploadDirectories();
 console.log(`📁 Uploads servidos de: ${uploadRoot}`);
 
-app.use(cors());
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
+app.use(cors(getCorsOptions()));
 app.use(express.json({ limit: "2mb" }));
 app.use("/uploads", express.static(uploadRoot));
 
@@ -112,5 +136,20 @@ app.use("/platings", platingRoutes);
 app.use("/products", productsRoutes);
 app.use("/kits", kitsRoutes);
 app.use("/upload", uploadRoutes);
+
+app.use((err, req, res, _next) => {
+  const origin = req.headers.origin;
+  if (origin && isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+
+  if (err.message === "Not allowed by CORS") {
+    return res.status(403).json({ error: "CORS not allowed" });
+  }
+
+  console.error(err);
+  res.status(500).json({ error: "internal error" });
+});
 
 export default app;
