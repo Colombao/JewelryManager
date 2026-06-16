@@ -44,12 +44,50 @@ function resolveChromeExecutable() {
           "chrome.exe"
         )
       : null,
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
   ].filter(Boolean);
 
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
+function shouldUseSparticuzChromium() {
+  if (process.env.USE_SPARTICUZ_CHROMIUM === "true") return true;
+  if (process.env.RAILWAY_ENVIRONMENT) return true;
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) return true;
+  return process.platform === "linux" && process.env.NODE_ENV === "production";
+}
+
+async function resolveLaunchOptions() {
+  if (shouldUseSparticuzChromium()) {
+    const chromium = (await import("@sparticuz/chromium")).default;
+
+    return {
+      args: [...chromium.args, "--disable-dev-shm-usage", "--lang=pt-BR"],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    };
+  }
+
+  const executablePath = resolveChromeExecutable();
+  if (!executablePath) return null;
+
+  return {
+    executablePath,
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--lang=pt-BR",
+    ],
+  };
+}
+
 export function isChromeAvailableForScraping() {
+  if (shouldUseSparticuzChromium()) return true;
   return Boolean(resolveChromeExecutable());
 }
 
@@ -137,24 +175,17 @@ let sharedBrowserPromise = null;
 
 async function getBrowser() {
   if (!sharedBrowserPromise) {
-    const executablePath = resolveChromeExecutable();
-    if (!executablePath) return null;
-
-    sharedBrowserPromise = puppeteer.launch({
-      executablePath,
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--lang=pt-BR",
-      ],
-    });
+    sharedBrowserPromise = (async () => {
+      const launchOptions = await resolveLaunchOptions();
+      if (!launchOptions) return null;
+      return puppeteer.launch(launchOptions);
+    })();
   }
 
   try {
     return await sharedBrowserPromise;
-  } catch {
+  } catch (err) {
+    console.error(`❌ Falha ao iniciar browser para scraping: ${err.message}`);
     sharedBrowserPromise = null;
     return null;
   }

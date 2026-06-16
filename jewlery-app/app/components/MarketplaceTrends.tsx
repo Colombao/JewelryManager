@@ -78,7 +78,7 @@ function ProductThumbnail({
   alt: string;
   sizeClass?: string;
 }) {
-  const imageUrl = resolveImageUrl(image);
+  const imageUrl = image?.startsWith("http") ? image : resolveImageUrl(image);
 
   return (
     <div
@@ -86,7 +86,12 @@ function ProductThumbnail({
     >
       {imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={imageUrl} alt={alt} className="h-full w-full object-cover" />
+        <img
+          src={imageUrl}
+          alt={alt}
+          className="h-full w-full object-cover"
+          referrerPolicy="no-referrer"
+        />
       ) : (
         <span className="text-[10px] text-slate-400 text-center px-1">Sem foto</span>
       )}

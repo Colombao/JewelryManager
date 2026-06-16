@@ -206,7 +206,10 @@ export async function enrichTrendsWithStock(trends) {
 export async function buildHybridTrends(limit = 10) {
   const products = await loadActiveProducts();
   const inStock = products.filter((product) => product.quantity > 0);
-  const keywords = JEWELRY_TREND_KEYWORDS.slice(0, limit);
+  const scrapeLimit =
+    Number(process.env.MARKETPLACE_SCRAPE_LIMIT) ||
+    (process.env.RAILWAY_ENVIRONMENT ? Math.min(limit, 5) : limit);
+  const keywords = JEWELRY_TREND_KEYWORDS.slice(0, scrapeLimit);
   const termsToFetch = [];
 
   for (const keyword of keywords) {
