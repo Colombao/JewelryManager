@@ -1,4 +1,4 @@
-# ERP para Semi Joias com Motor de Recomendação Baseado em Tendências de Mercado
+# CRM para Semi Joias com Motor de Recomendação Baseado em Tendências de Mercado
 **Autor:** João Vitor Colombo  
 **Curso:** Engenharia de Software  
 **Data:** Dezembro/2025  
