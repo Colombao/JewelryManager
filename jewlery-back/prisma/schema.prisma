@@ -76,6 +76,16 @@ model Collection {
   updatedAt DateTime  @updatedAt
 }
 
+model ProfitMargin {
+  id         Int      @id @default(autoincrement())
+  level      Int      @unique
+  name       String
+  multiplier Decimal  @db.Decimal(5, 2)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 model Product {
   id             Int      @id @default(autoincrement())
 

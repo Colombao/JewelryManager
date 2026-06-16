@@ -207,13 +207,13 @@ export default function MarketplaceTrends() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold text-white mb-4">
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 sm:mb-4">
             Tendências em Alta
           </h1>
-          <p className="text-xl text-slate-300 max-w-3xl mx-auto">
+          <p className="text-base sm:text-lg lg:text-xl text-slate-300 max-w-3xl mx-auto px-2">
             Produtos em destaque no mercado cruzados com o que você tem em
             estoque para montar kits mais assertivos.
           </p>
@@ -223,7 +223,7 @@ export default function MarketplaceTrends() {
               {new Date(meta.timestamp).toLocaleString("pt-BR")}
             </p>
           )}
-          <div className="mt-4 flex justify-center gap-3">
+          <div className="mt-4 flex flex-wrap justify-center gap-2 sm:gap-3">
             <button
               type="button"
               onClick={fetchTrends}
@@ -250,8 +250,8 @@ export default function MarketplaceTrends() {
                 key={`${trend.marketplace}-${trend.posicao}-${trend.nome}`}
                 className="group bg-gradient-to-r from-slate-800 to-slate-700 border border-slate-600 hover:border-purple-500 rounded-lg overflow-hidden transition hover:shadow-xl"
               >
-                <div className="flex flex-col lg:flex-row gap-6 p-6">
-                  <div className="flex gap-4 flex-1">
+                <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row gap-4 flex-1 min-w-0">
                     <div className="flex-shrink-0">
                       <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
                         <span className="text-xl font-bold text-white">
@@ -416,22 +416,22 @@ export default function MarketplaceTrends() {
           })}
         </div>
 
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white/10 backdrop-blur border border-white/20 rounded-lg p-6 text-center">
+        <div className="mt-8 sm:mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+          <div className="bg-white/10 backdrop-blur border border-white/20 rounded-lg p-4 sm:p-6 text-center">
             <div className="text-sm text-slate-400 mb-2">Tendências exibidas</div>
-            <div className="text-4xl font-bold text-white">{trends.length}</div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white">{trends.length}</div>
           </div>
-          <div className="bg-white/10 backdrop-blur border border-white/20 rounded-lg p-6 text-center">
+          <div className="bg-white/10 backdrop-blur border border-white/20 rounded-lg p-4 sm:p-6 text-center">
             <div className="text-sm text-slate-400 mb-2">
               Com produtos no estoque
             </div>
-            <div className="text-4xl font-bold text-green-400">
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">
               {stats.withStock}
             </div>
           </div>
-          <div className="bg-white/10 backdrop-blur border border-white/20 rounded-lg p-6 text-center">
+          <div className="bg-white/10 backdrop-blur border border-white/20 rounded-lg p-4 sm:p-6 text-center">
             <div className="text-sm text-slate-400 mb-2">Crescimento médio</div>
-            <div className="text-4xl font-bold text-yellow-400">
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-400">
               +{stats.avgGrowth}%
             </div>
           </div>

@@ -93,14 +93,14 @@ export default function TrendsAnalysis() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-white mb-4">
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 sm:mb-4">
             📊 Análise Avançada de Tendências
           </h1>
-          <p className="text-xl text-slate-300 mb-8">
+          <p className="text-base sm:text-lg lg:text-xl text-slate-300 mb-6 sm:mb-8 px-2">
             {analysis ? (
               <>
                 Inteligência de mercado: Monitoramento de{" "}
@@ -140,7 +140,7 @@ export default function TrendsAnalysis() {
         {analysis && (
           <div className="space-y-8">
             {/* RESUMO EXECUTIVO */}
-            <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl p-8">
+            <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl p-4 sm:p-6 lg:p-8">
               <h2 className="text-3xl font-bold text-white mb-6">
                 📈 Resumo Executivo
               </h2>
@@ -150,7 +150,7 @@ export default function TrendsAnalysis() {
                   <div className="text-sm text-blue-300 mb-2">
                     Total de Keywords Monitoradas
                   </div>
-                  <div className="text-4xl font-bold text-blue-100">
+                  <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-100">
                     {analysis.summary.totalKeywords}
                   </div>
                 </div>
@@ -159,7 +159,7 @@ export default function TrendsAnalysis() {
                   <div className="text-sm text-purple-300 mb-2">
                     Palavras em Tendência
                   </div>
-                  <div className="text-4xl font-bold text-purple-100">
+                  <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-100">
                     {analysis.summary.trendingFound}
                   </div>
                 </div>
@@ -168,7 +168,7 @@ export default function TrendsAnalysis() {
                   <div className="text-sm text-pink-300 mb-2">
                     Score Médio Geral
                   </div>
-                  <div className="text-4xl font-bold text-pink-100">
+                  <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-pink-100">
                     {analysis.summary.mediaGeral}
                   </div>
                 </div>
@@ -176,7 +176,7 @@ export default function TrendsAnalysis() {
             </div>
 
             {/* ANÁLISE POR CATEGORIA */}
-            <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl p-8">
+            <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl p-4 sm:p-6 lg:p-8">
               <h2 className="text-3xl font-bold text-white mb-6">
                 🎯 Análise por Categoria
               </h2>
@@ -237,7 +237,7 @@ export default function TrendsAnalysis() {
             </div>
 
             {/* KEYWORDS MONITORADAS POR CATEGORIA */}
-            <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl p-8">
+            <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl p-4 sm:p-6 lg:p-8">
               <h2 className="text-3xl font-bold text-white mb-6">
                 📋 Keywords Monitoradas por Categoria
               </h2>
@@ -314,7 +314,7 @@ export default function TrendsAnalysis() {
             </div>
 
             {/* TOP 10 KEYWORDS GLOBAIS */}
-            <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl p-8">
+            <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl p-4 sm:p-6 lg:p-8">
               <h2 className="text-3xl font-bold text-white mb-6">
                 🏆 Top 10 Keywords Globais
               </h2>

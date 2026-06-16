@@ -440,7 +440,7 @@ export default function MontarKit() {
           `}</style>
 
           {/* Toolbar */}
-          <div className="no-print sticky top-0 z-20 bg-white border-b border-[#e0e0e0] px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="no-print sticky top-14 lg:top-0 z-20 bg-white border-b border-[#e0e0e0] px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-semibold text-[#222]">
                 {editingKitId ? `Editar Kit #${kitNumber}` : "Montar Kit"}
@@ -625,8 +625,8 @@ export default function MontarKit() {
                 )}
 
                 {/* Items table */}
-                <div className="px-6 py-4">
-                  <table className="w-full text-sm">
+                <div className="px-4 sm:px-6 py-4 overflow-x-auto">
+                  <table className="w-full text-sm min-w-[480px]">
                     <thead>
                       <tr className="border-b-2 border-[#333] text-left">
                         <th className="py-2 pr-3 font-semibold text-[#333] w-[90px]">

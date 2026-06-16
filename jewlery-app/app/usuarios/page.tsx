@@ -1,15 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { apiUrl } from "@/lib/api";
 import Button from "../components/Button";
+import DataTable, { DataTableColumn } from "../components/DataTable";
 import MainLayout from "../components/MainLayout";
 import RequireAuth from "../components/RequireAuth";
+import TableActions, { StatusBadge } from "../components/TableActions";
 
 import Modal from "../components/Modal";
 import TextInput from "../components/TextInput";
+
+interface Reseller {
+  id: number;
+  name: string;
+  email: string;
+  cpf: string;
+  phone: string;
+  active: boolean;
+}
 
 export default function CadastroUsuario() {
   const router = useRouter();
@@ -30,7 +41,7 @@ export default function CadastroUsuario() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generalError, setGeneralError] = useState("");
 
-  const [resellers, setResellers] = useState<any[]>([]);
+  const [resellers, setResellers] = useState<Reseller[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -227,23 +238,96 @@ export default function CadastroUsuario() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const resellerColumns: DataTableColumn<Reseller>[] = useMemo(
+    () => [
+      {
+        key: "actions",
+        header: "Ações",
+        align: "center",
+        headerClassName: "sticky left-0 z-20 bg-slate-800 w-[108px]",
+        cellClassName: "sticky left-0 z-10 bg-white",
+        render: (r) => (
+          <TableActions
+            onEdit={() => handleEdit(r)}
+            onDelete={() => handleDelete(r.id)}
+            onToggle={() => handleToggleActive(r.id, r.active)}
+            isActive={r.active}
+          />
+        ),
+      },
+      {
+        key: "name",
+        header: "Nome",
+        render: (r) => (
+          <span className="font-medium text-slate-900">{r.name}</span>
+        ),
+      },
+      {
+        key: "email",
+        header: "Email",
+        cellClassName: "text-slate-600",
+        render: (r) => r.email,
+      },
+      {
+        key: "cpf",
+        header: "CPF",
+        cellClassName: "text-slate-600 whitespace-nowrap",
+        render: (r) => r.cpf,
+      },
+      {
+        key: "phone",
+        header: "Telefone",
+        cellClassName: "text-slate-600 whitespace-nowrap",
+        render: (r) => r.phone,
+      },
+      {
+        key: "status",
+        header: "Status",
+        align: "center",
+        render: (r) => <StatusBadge active={r.active} />,
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const renderResellerMobileCard = (r: Reseller) => (
+    <article className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="flex items-center gap-2 p-3 bg-slate-50 border-b border-slate-100">
+        <TableActions
+          onEdit={() => handleEdit(r)}
+          onDelete={() => handleDelete(r.id)}
+          onToggle={() => handleToggleActive(r.id, r.active)}
+          isActive={r.active}
+          compact={false}
+        />
+        <StatusBadge active={r.active} />
+      </div>
+      <div className="p-4 space-y-1">
+        <h3 className="font-semibold text-slate-900">{r.name}</h3>
+        <p className="text-sm text-slate-600">{r.email}</p>
+        <p className="text-sm text-slate-600">{r.cpf}</p>
+        <p className="text-sm text-slate-600">{r.phone}</p>
+      </div>
+    </article>
+  );
+
   return (
     <RequireAuth>
       <MainLayout>
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-8">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-4 sm:p-6 lg:p-8">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-slate-900 mb-2">
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 mb-2">
               Revendedores
             </h1>
-            <p className="text-slate-600">
+            <p className="text-sm sm:text-base text-slate-600">
               Gerencie revendedores: visualizar, criar, editar e excluir.
             </p>
           </div>
 
-          <div className="flex items-center justify-between mb-6">
-            <div />
-            <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 mb-6">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <Button
                 type="button"
                 variant="primary"
@@ -258,88 +342,16 @@ export default function CadastroUsuario() {
           </div>
 
           <div className="max-w-full">
-            <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left table-auto">
-                  <thead className="bg-slate-50">
-                    <tr className="text-sm text-slate-700 uppercase tracking-wide">
-                      <th className="px-4 py-3">Nome</th>
-                      <th className="px-4 py-3">Email</th>
-                      <th className="px-4 py-3">CPF</th>
-                      <th className="px-4 py-3">Telefone</th>
-                      <th className="px-4 py-3">Ativo</th>
-                      <th className="px-4 py-3">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resellers.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={7}
-                          className="px-4 py-8 text-center text-slate-500"
-                        >
-                          {isLoading ? (
-                            <div className="animate-pulse">
-                              Carregando revendedores...
-                            </div>
-                          ) : (
-                            "Nenhum revendedor cadastrado."
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                    {resellers.map((r, idx) => (
-                      <tr
-                        key={r.id}
-                        className={`border-t ${
-                          idx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                        } hover:bg-slate-100`}
-                      >
-                        <td className="px-4 py-3 font-semibold text-slate-800">
-                          {r.name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">{r.email}</td>
-                        <td className="px-4 py-3 text-slate-600">{r.cpf}</td>
-                        <td className="px-4 py-3 text-slate-600">{r.phone}</td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {r.active ? "Sim" : "Não"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="text-sm px-3 py-1"
-                              onClick={() => {
-                                handleEdit(r);
-                              }}
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="text-sm px-3 py-1"
-                              onClick={() => handleDelete(r.id)}
-                            >
-                              Excluir
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={`${r.active ? "danger" : "success"}`}
-                              className="text-sm px-3 py-1"
-                              onClick={() => handleToggleActive(r.id, r.active)}
-                            >
-                              {r.active ? "Desativar" : "Ativar"}
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <DataTable
+              data={resellers}
+              columns={resellerColumns}
+              rowKey={(r) => r.id}
+              isLoading={isLoading}
+              emptyMessage="Nenhum revendedor cadastrado."
+              loadingMessage="Carregando revendedores..."
+              minWidth="720px"
+              mobileCardRender={renderResellerMobileCard}
+            />
 
             <Modal
               open={showModal}

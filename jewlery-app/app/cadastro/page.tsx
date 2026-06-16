@@ -1,13 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { apiUrl } from "@/lib/api";
+import {
+  formatMultiplier,
+  getMarginMultipliers,
+  ProfitMargin,
+} from "@/lib/pricing";
 import Button from "../components/Button";
+import DataTable, { DataTableColumn } from "../components/DataTable";
 import MainLayout from "../components/MainLayout";
 import Modal from "../components/Modal";
 import RequireAuth from "../components/RequireAuth";
-import TextInput from "../components/TextInput";
+import TableActions, { StatusBadge } from "../components/TableActions";
 import {
   IMPORT_ACCEPT,
   ImportProductRow,
@@ -82,11 +88,6 @@ function formatDecimal(value: string | null | undefined) {
   return value;
 }
 
-function truncate(text: string | null | undefined, max = 40) {
-  if (!text) return "-";
-  return text.length > max ? `${text.slice(0, max)}...` : text;
-}
-
 function toNum(value: string) {
   const n = parseFloat(value.replace(",", "."));
   return Number.isFinite(n) ? n : 0;
@@ -94,6 +95,12 @@ function toNum(value: string) {
 
 function formatMoney(value: number) {
   return value.toFixed(2);
+}
+
+function formatCurrency(value: string | null | undefined) {
+  const n = parseFloat(String(value ?? "").replace(",", "."));
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function resolveImageUrl(image: string | null | undefined, apiUrl: string) {
@@ -118,6 +125,8 @@ export default function CadastroItem() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ done: 0, total: 0 });
   const [skipDuplicates, setSkipDuplicates] = useState(true);
+  const [search, setSearch] = useState("");
+  const [profitMargins, setProfitMargins] = useState<ProfitMargin[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -434,11 +443,30 @@ export default function CadastroItem() {
     }
   }
 
+  async function loadProfitMargins() {
+    try {
+      const res = await fetch(`${apiUrl}/profit-margins`);
+      if (!res.ok) throw new Error("Erro ao carregar margens de lucro");
+      const data = await res.json();
+      setProfitMargins(data);
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Erro ao carregar margens de lucro"
+      );
+    }
+  }
+
   useEffect(() => {
     loadProducts();
     loadLookups();
+    loadProfitMargins();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const marginMultipliers = useMemo(
+    () => getMarginMultipliers(profitMargins),
+    [profitMargins]
+  );
 
   useEffect(() => {
     const qty = toNum(formData.quantity);
@@ -447,7 +475,7 @@ export default function CadastroItem() {
 
     const total = qty * unit;
     const pieces = total;
-    const grand = pieces + plating;
+    const grand = unit + plating;
 
     setFormData((prev) => {
       const next = { ...prev };
@@ -457,12 +485,12 @@ export default function CadastroItem() {
         next.piecesTotal = formatMoney(pieces);
       }
 
-      if (pieces > 0 || plating > 0) {
+      if (unit > 0 || plating > 0) {
         next.grandTotal = formatMoney(grand);
         if (grand > 0) {
-          next.priceLevel1 = formatMoney(grand * 1.5);
-          next.priceLevel2 = formatMoney(grand * 2.0);
-          next.priceLevel3 = formatMoney(grand * 2.5);
+          next.priceLevel1 = formatMoney(grand * marginMultipliers.level1);
+          next.priceLevel2 = formatMoney(grand * marginMultipliers.level2);
+          next.priceLevel3 = formatMoney(grand * marginMultipliers.level3);
         }
       }
 
@@ -476,25 +504,278 @@ export default function CadastroItem() {
 
       return changed ? next : prev;
     });
-  }, [formData.quantity, formData.unitPrice, formData.platingTotal]);
+  }, [
+    formData.quantity,
+    formData.unitPrice,
+    formData.platingTotal,
+    marginMultipliers.level1,
+    marginMultipliers.level2,
+    marginMultipliers.level3,
+  ]);
 
-  const selectClass =
-    "w-full h-12 px-3 rounded-md border border-slate-200 text-black focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white";
+  const filteredProducts = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return products;
+
+    return products.filter((p) => {
+      const haystack = [
+        p.code,
+        p.sku,
+        p.reference,
+        p.barcode,
+        p.name,
+        p.description,
+        p.supplier?.name,
+        p.category?.name,
+        p.platingType?.name,
+        p.collection?.name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(term);
+    });
+  }, [products, search]);
+
+  const productColumns: DataTableColumn<Product>[] = useMemo(
+    () => [
+      {
+        key: "actions",
+        header: "Ações",
+        align: "center",
+        headerClassName: "sticky left-0 z-20 bg-slate-800 w-[108px]",
+        cellClassName: "sticky left-0 z-10 bg-white",
+        render: (p) => (
+          <TableActions
+            onEdit={() => handleEdit(p)}
+            onDelete={() => handleDelete(p.id)}
+            onToggle={() => handleToggleActive(p.id, p.active)}
+            isActive={p.active}
+          />
+        ),
+      },
+      {
+        key: "code",
+        header: "Código",
+        headerClassName:
+          "sticky left-[108px] z-20 bg-slate-800 w-24 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.3)]",
+        cellClassName:
+          "sticky left-[108px] z-10 bg-white font-mono text-xs font-semibold text-slate-700 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.06)]",
+        render: (p) => p.code || "-",
+      },
+      {
+        key: "product",
+        header: "Produto",
+        headerClassName: "min-w-[200px]",
+        render: (p) => (
+          <>
+            <p className="font-medium text-slate-900 leading-snug">{p.name}</p>
+            <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[220px]">
+              {[p.sku && `SKU ${p.sku}`, p.reference && `Ref. ${p.reference}`]
+                .filter(Boolean)
+                .join(" · ") || "—"}
+            </p>
+          </>
+        ),
+      },
+      {
+        key: "image",
+        header: "Foto",
+        align: "center",
+        headerClassName: "w-16",
+        render: (p) =>
+          p.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={resolveImageUrl(p.image, apiUrl) ?? ""}
+              alt={p.name}
+              className="h-10 w-10 rounded-md object-cover border border-slate-200 mx-auto"
+            />
+          ) : (
+            <span className="text-slate-300 text-xs">—</span>
+          ),
+      },
+      {
+        key: "supplier",
+        header: "Fornecedor",
+        cellClassName: "text-slate-600 whitespace-nowrap",
+        render: (p) => p.supplier?.name || "-",
+      },
+      {
+        key: "category",
+        header: "Categoria",
+        cellClassName: "text-slate-600 whitespace-nowrap",
+        render: (p) => p.category?.name || "-",
+      },
+      {
+        key: "plating",
+        header: "Banho",
+        cellClassName: "text-slate-600 whitespace-nowrap",
+        render: (p) => p.platingType?.name || "-",
+      },
+      {
+        key: "collection",
+        header: "Coleção",
+        headerClassName: "hidden xl:table-cell",
+        cellClassName: "text-slate-600 whitespace-nowrap hidden xl:table-cell",
+        render: (p) => p.collection?.name || "-",
+      },
+      {
+        key: "quantity",
+        header: "Qtd",
+        align: "center",
+        headerClassName: "w-14",
+        cellClassName: "text-center font-medium text-slate-800",
+        render: (p) => p.quantity,
+      },
+      {
+        key: "weight",
+        header: "Peso",
+        align: "right",
+        headerClassName: "hidden lg:table-cell",
+        cellClassName: "text-right text-slate-600 tabular-nums hidden lg:table-cell",
+        render: (p) => formatDecimal(p.weight),
+      },
+      {
+        key: "unitPrice",
+        header: "Preço Unit.",
+        align: "right",
+        cellClassName: "text-right text-slate-700 tabular-nums whitespace-nowrap",
+        render: (p) => formatCurrency(p.unitPrice),
+      },
+      {
+        key: "platingTotal",
+        header: "Banho",
+        align: "right",
+        headerClassName: "hidden xl:table-cell",
+        cellClassName:
+          "text-right text-slate-600 tabular-nums whitespace-nowrap hidden xl:table-cell",
+        render: (p) => formatCurrency(p.platingTotal),
+      },
+      {
+        key: "grandTotal",
+        header: "Total Geral",
+        align: "right",
+        cellClassName: "text-right text-slate-800 tabular-nums whitespace-nowrap",
+        render: (p) => formatCurrency(p.grandTotal),
+      },
+      {
+        key: "priceLevel1",
+        header: "Nível 1",
+        align: "right",
+        headerClassName: "hidden lg:table-cell",
+        cellClassName:
+          "text-right text-slate-600 tabular-nums whitespace-nowrap hidden lg:table-cell",
+        render: (p) => formatCurrency(p.priceLevel1),
+      },
+      {
+        key: "priceLevel2",
+        header: "Nível 2",
+        align: "right",
+        headerClassName: "hidden xl:table-cell",
+        cellClassName:
+          "text-right text-slate-600 tabular-nums whitespace-nowrap hidden xl:table-cell",
+        render: (p) => formatCurrency(p.priceLevel2),
+      },
+      {
+        key: "priceLevel3",
+        header: "Nível 3",
+        align: "right",
+        headerClassName: "hidden xl:table-cell",
+        cellClassName:
+          "text-right text-slate-600 tabular-nums whitespace-nowrap hidden xl:table-cell",
+        render: (p) => formatCurrency(p.priceLevel3),
+      },
+      {
+        key: "adjustedPrice",
+        header: "Ajustado",
+        align: "right",
+        headerClassName: "font-semibold",
+        cellClassName:
+          "text-right font-semibold text-blue-700 tabular-nums whitespace-nowrap",
+        render: (p) => formatCurrency(p.adjustedPrice),
+      },
+      {
+        key: "status",
+        header: "Status",
+        align: "center",
+        headerClassName: "w-20",
+        render: (p) => <StatusBadge active={p.active} />,
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const renderProductMobileCard = (p: Product) => (
+    <article className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="flex items-center gap-2 p-3 bg-slate-50 border-b border-slate-100">
+        <TableActions
+          onEdit={() => handleEdit(p)}
+          onDelete={() => handleDelete(p.id)}
+          onToggle={() => handleToggleActive(p.id, p.active)}
+          isActive={p.active}
+          compact={false}
+        />
+        <span className="ml-auto text-xs font-mono font-semibold text-slate-500">
+          {p.code || `#${p.id}`}
+        </span>
+      </div>
+      <div className="p-4 flex gap-3">
+        {p.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={resolveImageUrl(p.image, apiUrl) ?? ""}
+            alt={p.name}
+            className="h-16 w-16 rounded-lg object-cover border border-slate-200 shrink-0"
+          />
+        ) : (
+          <div className="h-16 w-16 rounded-lg border border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400 shrink-0">
+            Sem foto
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-slate-900 leading-tight">{p.name}</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {[p.sku, p.reference].filter(Boolean).join(" · ") || "—"}
+          </p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-slate-600">
+            <span>{p.category?.name || "—"}</span>
+            <span>Qtd: {p.quantity}</span>
+            <span>{formatCurrency(p.adjustedPrice || p.priceLevel1)}</span>
+          </div>
+        </div>
+        <StatusBadge active={p.active} />
+      </div>
+    </article>
+  );
 
   return (
     <RequireAuth>
       <MainLayout>
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-8">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-slate-900 mb-2">Produtos</h1>
-            <p className="text-slate-600">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-4 sm:p-6 lg:p-8">
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 mb-2">Produtos</h1>
+            <p className="text-sm sm:text-base text-slate-600">
               Gerencie produtos: visualizar, criar, editar e excluir.
             </p>
           </div>
 
-          <div className="flex items-center justify-between mb-6">
-            <div />
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+            <div className="relative flex-1 max-w-xl">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por código, nome, SKU, categoria..."
+                className="w-full h-11 pl-4 pr-4 rounded-lg border border-slate-200 bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300 shadow-sm"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
+                {filteredProducts.length} de {products.length}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
               <input
                 ref={importInputRef}
                 type="file"
@@ -523,129 +804,16 @@ export default function CadastroItem() {
           </div>
 
           <div className="max-w-full">
-            <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left table-auto min-w-[2400px]">
-                  <thead className="bg-slate-50">
-                    <tr className="text-xs text-slate-700 uppercase tracking-wide">
-                      <th className="px-3 py-3 whitespace-nowrap">Código</th>
-                      <th className="px-3 py-3 whitespace-nowrap">SKU</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Referência</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Cód. Barras</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Nome</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Descrição</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Imagem</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Fornecedor</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Categoria</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Banho</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Coleção</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Qtd</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Peso</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Preço Unit.</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Total</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Banho Total</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Peças Total</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Total Geral</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Nível 1</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Nível 2</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Nível 3</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Preço Ajust.</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Ativo</th>
-                      <th className="px-3 py-3 whitespace-nowrap">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {products.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={24}
-                          className="px-4 py-8 text-center text-slate-500"
-                        >
-                          {isLoading ? (
-                            <div className="animate-pulse">
-                              Carregando produtos...
-                            </div>
-                          ) : (
-                            "Nenhum produto cadastrado."
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                    {products.map((p, idx) => (
-                      <tr
-                        key={p.id}
-                        className={`border-t text-sm ${
-                          idx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                        } hover:bg-slate-100`}
-                      >
-                        <td className="px-3 py-3 text-slate-600">{p.code || "-"}</td>
-                        <td className="px-3 py-3 text-slate-600">{p.sku || "-"}</td>
-                        <td className="px-3 py-3 text-slate-600">{p.reference || "-"}</td>
-                        <td className="px-3 py-3 text-slate-600">{p.barcode || "-"}</td>
-                        <td className="px-3 py-3 font-semibold text-slate-800">{p.name}</td>
-                        <td className="px-3 py-3 text-slate-600">{truncate(p.description)}</td>
-                        <td className="px-3 py-3 text-slate-600">
-                          {p.image ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={resolveImageUrl(p.image, apiUrl) ?? ""}
-                              alt={p.name}
-                              className="h-10 w-10 rounded object-cover border border-slate-200"
-                            />
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-slate-600">{p.supplier?.name || "-"}</td>
-                        <td className="px-3 py-3 text-slate-600">{p.category?.name || "-"}</td>
-                        <td className="px-3 py-3 text-slate-600">{p.platingType?.name || "-"}</td>
-                        <td className="px-3 py-3 text-slate-600">{p.collection?.name || "-"}</td>
-                        <td className="px-3 py-3 text-slate-600">{p.quantity}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatDecimal(p.weight)}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatDecimal(p.unitPrice)}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatDecimal(p.totalPrice)}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatDecimal(p.platingTotal)}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatDecimal(p.piecesTotal)}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatDecimal(p.grandTotal)}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatDecimal(p.priceLevel1)}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatDecimal(p.priceLevel2)}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatDecimal(p.priceLevel3)}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatDecimal(p.adjustedPrice)}</td>
-                        <td className="px-3 py-3 text-slate-600">{p.active ? "Sim" : "Não"}</td>
-                        <td className="px-3 py-3">
-                          <div className="flex gap-2 flex-wrap">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="text-sm px-3 py-1"
-                              onClick={() => handleEdit(p)}
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="text-sm px-3 py-1"
-                              onClick={() => handleDelete(p.id)}
-                            >
-                              Excluir
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={p.active ? "danger" : "success"}
-                              className="text-sm px-3 py-1"
-                              onClick={() => handleToggleActive(p.id, p.active)}
-                            >
-                              {p.active ? "Desativar" : "Ativar"}
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <DataTable
+              data={filteredProducts}
+              columns={productColumns}
+              rowKey={(p) => p.id}
+              isLoading={isLoading}
+              emptyMessage="Nenhum produto encontrado."
+              loadingMessage="Carregando produtos..."
+              minWidth="1200px"
+              mobileCardRender={renderProductMobileCard}
+            />
 
             <Modal
               open={showModal}
@@ -656,149 +824,157 @@ export default function CadastroItem() {
                 resetForm();
               }}
             >
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                  <section>
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-3">
-                      Identificação
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleSubmit} className="space-y-5 pb-2">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <FormCard title="Identificação" subtitle="Códigos e referências do produto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <Field label="Código" name="code" value={formData.code} onChange={handleChange} />
                       <Field label="SKU" name="sku" value={formData.sku} onChange={handleChange} />
                       <Field label="Referência" name="reference" value={formData.reference} onChange={handleChange} />
                       <Field label="Código de Barras" name="barcode" value={formData.barcode} onChange={handleChange} />
                     </div>
-                  </section>
+                  </FormCard>
 
-                  <section>
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-3">
-                      Relacionamentos
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <SelectField label="Fornecedor" name="supplierId" value={formData.supplierId} onChange={handleChange} options={suppliers} className={selectClass} />
-                      <SelectField label="Categoria" name="categoryId" value={formData.categoryId} onChange={handleChange} options={categories} className={selectClass} />
-                      <SelectField label="Tipo de Banho" name="platingTypeId" value={formData.platingTypeId} onChange={handleChange} options={platings} className={selectClass} />
-                      <SelectField label="Coleção" name="collectionId" value={formData.collectionId} onChange={handleChange} options={collections} className={selectClass} />
+                  <FormCard title="Classificação" subtitle="Fornecedor, categoria e banho">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <SelectField label="Fornecedor" name="supplierId" value={formData.supplierId} onChange={handleChange} options={suppliers} />
+                      <SelectField label="Categoria" name="categoryId" value={formData.categoryId} onChange={handleChange} options={categories} />
+                      <SelectField label="Tipo de Banho" name="platingTypeId" value={formData.platingTypeId} onChange={handleChange} options={platings} />
+                      <SelectField label="Coleção" name="collectionId" value={formData.collectionId} onChange={handleChange} options={collections} />
                     </div>
-                  </section>
+                  </FormCard>
                 </div>
 
-                <section>
-                  <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-3">
-                    Informações Básicas
-                  </h4>
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                    <Field label="Nome *" name="name" value={formData.name} onChange={handleChange} required />
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">
-                        Imagem do Produto
-                      </label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                        className="block w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
-                      />
-                      <p className="text-xs text-slate-500 mt-1">PNG, JPG ou WEBP — máx. 5 MB</p>
-                    </div>
-                    <div className="flex items-end">
-                      {imagePreview ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={imagePreview}
-                          alt="Preview"
-                          className="h-24 w-24 rounded-lg object-cover border border-slate-200"
+                <FormCard title="Produto" subtitle="Informações exibidas no catálogo e nos kits">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-5">
+                    <div className="space-y-3">
+                      <Field label="Nome *" name="name" value={formData.name} onChange={handleChange} required />
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                          Descrição
+                        </label>
+                        <textarea
+                          name="description"
+                          value={formData.description}
+                          onChange={handleChange}
+                          rows={3}
+                          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 resize-none"
+                          placeholder="Descrição opcional do produto"
                         />
-                      ) : (
-                        <div className="h-24 w-24 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-xs text-slate-400">
-                          Sem imagem
-                        </div>
-                      )}
+                      </div>
                     </div>
-                    <div className="lg:col-span-3">
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">
-                        Descrição
+
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="relative w-full aspect-square max-w-[140px] rounded-xl overflow-hidden border-2 border-dashed border-slate-200 bg-white flex items-center justify-center">
+                        {imagePreview ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={imagePreview}
+                            alt="Preview"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xs text-slate-400 text-center px-2">
+                            Sem imagem
+                          </span>
+                        )}
+                      </div>
+                      <label className="w-full cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="sr-only"
+                        />
+                        <span className="flex items-center justify-center w-full h-9 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 transition">
+                          Escolher foto
+                        </span>
                       </label>
-                      <textarea
-                        name="description"
-                        value={formData.description}
-                        onChange={handleChange}
-                        rows={2}
-                        className="w-full px-3 py-2 rounded-md border border-slate-200 text-black focus:outline-none focus:ring-2 focus:ring-blue-300"
-                        placeholder="Descrição do produto"
-                      />
+                      <p className="text-[10px] text-slate-400 text-center leading-tight">
+                        PNG, JPG ou WEBP · máx. 5 MB
+                      </p>
                     </div>
                   </div>
-                </section>
+                </FormCard>
 
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                  <section>
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-3">
-                      Estoque
-                    </h4>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <FormCard title="Estoque">
                     <div className="grid grid-cols-2 gap-3">
                       <Field label="Quantidade" name="quantity" type="number" value={formData.quantity} onChange={handleChange} />
                       <Field label="Peso (kg)" name="weight" type="number" step="0.001" value={formData.weight} onChange={handleChange} />
                     </div>
-                  </section>
+                  </FormCard>
 
-                  <section>
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-3">
-                      Custos
-                    </h4>
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                      <Field label="Preço Unitário" name="unitPrice" type="number" step="0.01" value={formData.unitPrice} onChange={handleChange} />
-                      <Field label="Total Banho" name="platingTotal" type="number" step="0.01" value={formData.platingTotal} onChange={handleChange} />
-                      <Field label="Total" name="totalPrice" type="number" step="0.01" value={formData.totalPrice} onChange={handleChange} readOnly hint="Qtd × Preço unitário" />
-                      <Field label="Total Peças" name="piecesTotal" type="number" step="0.01" value={formData.piecesTotal} onChange={handleChange} readOnly hint="Igual ao total de peças" />
-                      <Field label="Total Geral" name="grandTotal" type="number" step="0.01" value={formData.grandTotal} onChange={handleChange} readOnly hint="Peças + Banho" />
+                  <FormCard title="Custos" subtitle="Base para cálculo por peça">
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Preço Unitário" name="unitPrice" type="number" step="0.01" value={formData.unitPrice} onChange={handleChange} />
+                        <Field label="Banho (por peça)" name="platingTotal" type="number" step="0.01" value={formData.platingTotal} onChange={handleChange} />
+                      </div>
+                      <ComputedGroup label="Calculado">
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="Valor em estoque" name="totalPrice" type="number" step="0.01" value={formData.totalPrice} onChange={handleChange} readOnly hint="Qtd × Preço unitário" />
+                          <Field label="Custo por peça" name="grandTotal" type="number" step="0.01" value={formData.grandTotal} onChange={handleChange} readOnly hint="Preço unit. + Banho" />
+                        </div>
+                      </ComputedGroup>
                     </div>
-                  </section>
+                  </FormCard>
 
-                  <section>
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-3">
-                      Tabelas de Preço
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Nível 1" name="priceLevel1" type="number" step="0.01" value={formData.priceLevel1} onChange={handleChange} readOnly hint="Total geral × 1,5" />
-                      <Field label="Nível 2" name="priceLevel2" type="number" step="0.01" value={formData.priceLevel2} onChange={handleChange} readOnly hint="Total geral × 2,0" />
-                      <Field label="Nível 3" name="priceLevel3" type="number" step="0.01" value={formData.priceLevel3} onChange={handleChange} readOnly hint="Total geral × 2,5" />
-                      <Field label="Preço Ajustado" name="adjustedPrice" type="number" step="0.01" value={formData.adjustedPrice} onChange={handleChange} />
+                  <FormCard title="Tabela de preços" subtitle="Usada na montagem de kits">
+                    <div className="space-y-3">
+                      <ComputedGroup label="Níveis automáticos">
+                        <div className="grid grid-cols-3 gap-2">
+                          <Field label="Nível 1" name="priceLevel1" type="number" step="0.01" value={formData.priceLevel1} onChange={handleChange} readOnly compact hint={`× ${formatMultiplier(marginMultipliers.level1)}`} />
+                          <Field label="Nível 2" name="priceLevel2" type="number" step="0.01" value={formData.priceLevel2} onChange={handleChange} readOnly compact hint={`× ${formatMultiplier(marginMultipliers.level2)}`} />
+                          <Field label="Nível 3" name="priceLevel3" type="number" step="0.01" value={formData.priceLevel3} onChange={handleChange} readOnly compact hint={`× ${formatMultiplier(marginMultipliers.level3)}`} />
+                        </div>
+                      </ComputedGroup>
+                      <Field
+                        label="Preço ajustado unitário"
+                        name="adjustedPrice"
+                        type="number"
+                        step="0.01"
+                        value={formData.adjustedPrice}
+                        onChange={handleChange}
+                        highlight
+                      />
                     </div>
-                  </section>
+                  </FormCard>
                 </div>
 
-                <section>
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="sticky bottom-0 -mx-1 px-1 pt-4 mt-2 bg-white border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
                     <input
                       type="checkbox"
                       name="active"
                       checked={formData.active}
                       onChange={handleChange}
-                      className="h-4 w-4 rounded border-slate-300"
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-sm font-semibold text-slate-700">Produto ativo</span>
+                    <span className="text-sm text-slate-700">
+                      Produto ativo no catálogo
+                    </span>
                   </label>
-                </section>
 
-                <div className="flex items-center justify-end gap-4">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setShowModal(false);
-                      resetForm();
-                    }}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting
-                      ? "Salvando..."
-                      : editingId
-                      ? "Salvar Alterações"
-                      : "Cadastrar"}
-                  </Button>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setShowModal(false);
+                        resetForm();
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting
+                        ? "Salvando..."
+                        : editingId
+                        ? "Salvar alterações"
+                        : "Cadastrar produto"}
+                    </Button>
+                  </div>
                 </div>
               </form>
             </Modal>
@@ -917,6 +1093,52 @@ export default function CadastroItem() {
   );
 }
 
+function FormCard({
+  title,
+  subtitle,
+  children,
+  className = "",
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden ${className}`}
+    >
+      <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-100">
+        <h4 className="text-sm font-semibold text-slate-800">{title}</h4>
+        {subtitle && (
+          <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
+        )}
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
+}
+
+function ComputedGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg bg-slate-50 border border-slate-100 p-3 space-y-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+const fieldInputClass =
+  "w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition";
+
 function Field({
   label,
   name,
@@ -927,6 +1149,8 @@ function Field({
   required,
   readOnly,
   hint,
+  compact,
+  highlight,
 }: {
   label: string;
   name: string;
@@ -937,13 +1161,19 @@ function Field({
   required?: boolean;
   readOnly?: boolean;
   hint?: string;
+  compact?: boolean;
+  highlight?: boolean;
 }) {
   return (
     <div>
-      <label className="block text-sm font-semibold text-slate-700 mb-2">
+      <label
+        className={`block font-medium text-slate-600 mb-1 ${
+          compact ? "text-[11px]" : "text-xs"
+        }`}
+      >
         {label}
       </label>
-      <TextInput
+      <input
         type={type}
         name={name}
         value={value}
@@ -951,10 +1181,18 @@ function Field({
         step={step}
         required={required}
         readOnly={readOnly}
-        className={`!pl-3 ${readOnly ? "bg-slate-50 text-slate-600 cursor-default" : ""}`}
+        className={`${fieldInputClass} ${
+          readOnly
+            ? "bg-slate-100/80 text-slate-600 border-slate-100 cursor-default focus:ring-0 focus:border-slate-100"
+            : ""
+        } ${
+          highlight
+            ? "border-blue-300 bg-blue-50/40 font-semibold text-blue-900 focus:ring-blue-500/40 focus:border-blue-400"
+            : ""
+        } ${compact ? "h-9 text-xs" : ""}`}
       />
       {hint && (
-        <p className="text-xs text-slate-400 mt-1">{hint}</p>
+        <p className="text-[10px] text-slate-400 mt-1 leading-tight">{hint}</p>
       )}
     </div>
   );
@@ -966,21 +1204,24 @@ function SelectField({
   value,
   onChange,
   options,
-  className,
 }: {
   label: string;
   name: string;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   options: NamedItem[];
-  className: string;
 }) {
   return (
     <div>
-      <label className="block text-sm font-semibold text-slate-700 mb-2">
+      <label className="block text-xs font-medium text-slate-600 mb-1">
         {label}
       </label>
-      <select name={name} value={value} onChange={onChange} className={className}>
+      <select
+        name={name}
+        value={value}
+        onChange={onChange}
+        className={`${fieldInputClass} cursor-pointer`}
+      >
         <option value="">Selecione...</option>
         {options.map((opt) => (
           <option key={opt.id} value={opt.id}>

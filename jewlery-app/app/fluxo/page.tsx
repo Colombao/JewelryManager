@@ -376,18 +376,18 @@ export default function FluxoPage() {
   return (
     <RequireAuth>
       <MainLayout>
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-8">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-4 sm:p-6 lg:p-8">
           <div className="mb-6">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div>
-                <h1 className="text-4xl font-bold text-slate-900">Fluxo</h1>
-                <p className="text-slate-600">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900">Fluxo</h1>
+                <p className="text-sm sm:text-base text-slate-600">
                   Arraste cards entre etapas (Trelo-like).
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div className="w-full sm:w-auto">
                   <Select
                     defaultValue={
                       boardOptions.find(
@@ -426,7 +426,7 @@ export default function FluxoPage() {
                           );
                         });
                     }}
-                    className="w-[240px]"
+                    className="w-full sm:w-[240px]"
                     styles={{
                       control: (base, state) => ({
                         ...base,
@@ -606,7 +606,7 @@ export default function FluxoPage() {
               return (
                 <div
                   key={s.id}
-                  className={`w-80 shrink-0 rounded-xl bg-white shadow-sm border border-slate-200 p-3 ${
+                  className={`w-[280px] sm:w-80 shrink-0 rounded-xl bg-white shadow-sm border border-slate-200 p-3 ${
                     isOver ? "ring-2 ring-blue-500" : ""
                   }`}
                   onDragOver={(e) => {

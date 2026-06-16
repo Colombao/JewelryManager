@@ -228,18 +228,17 @@ export default function Dashboard() {
   return (
     <RequireAuth>
       <MainLayout>
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-8">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-4 sm:p-6 lg:p-8">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-slate-900 mb-2">Produtos</h1>
-            <p className="text-slate-600">
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 mb-2">Produtos</h1>
+            <p className="text-sm sm:text-base text-slate-600">
               Gerencie produtos: visualizar, criar, editar e excluir.
             </p>
           </div>
 
-          <div className="flex items-center justify-between mb-6">
-            <div />
-            <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 mb-6">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <Button
                 type="button"
                 variant="primary"

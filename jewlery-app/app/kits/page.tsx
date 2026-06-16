@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { FiEdit2, FiEye, FiTrash2 } from "react-icons/fi";
 import { apiUrl } from "@/lib/api";
 import Button from "../components/Button";
+import DataTable, { DataTableColumn } from "../components/DataTable";
 import MainLayout from "../components/MainLayout";
 import Modal from "../components/Modal";
 import RequireAuth from "../components/RequireAuth";
+import TableActions from "../components/TableActions";
 import {
   createLineFromKitItem,
   formatBRL,
@@ -170,16 +173,157 @@ export default function KitsMontados() {
     [selectedKit]
   );
 
+  const kitColumns: DataTableColumn<KitSummary>[] = useMemo(
+    () => [
+      {
+        key: "actions",
+        header: "Ações",
+        align: "center",
+        headerClassName: "sticky left-0 z-20 bg-slate-800 w-[120px]",
+        cellClassName: "sticky left-0 z-10 bg-white",
+        render: (kit) => (
+          <TableActions onDelete={() => handleDelete(kit.id, kit.kitNumber)}>
+            <button
+              type="button"
+              onClick={() => openKitDetail(kit.id)}
+              title="Ver detalhes"
+              aria-label="Ver detalhes"
+              className="p-1.5 rounded-md text-slate-600 hover:bg-slate-100 transition"
+            >
+              <FiEye size={16} />
+            </button>
+            <Link
+              href={`/kit?edit=${kit.id}`}
+              title="Editar kit"
+              aria-label="Editar kit"
+              className="p-1.5 rounded-md text-blue-600 hover:bg-blue-100 transition inline-flex"
+            >
+              <FiEdit2 size={16} />
+            </Link>
+          </TableActions>
+        ),
+      },
+      {
+        key: "kitNumber",
+        header: "Nº Kit",
+        render: (kit) => (
+          <span className="font-bold text-[#b8860b]">#{kit.kitNumber}</span>
+        ),
+      },
+      {
+        key: "issueDate",
+        header: "Emissão",
+        cellClassName: "text-slate-600 whitespace-nowrap",
+        render: (kit) => formatDate(kit.issueDate),
+      },
+      {
+        key: "returnDate",
+        header: "Devolução",
+        cellClassName: "text-slate-600 whitespace-nowrap",
+        render: (kit) => formatDate(kit.returnDate),
+      },
+      {
+        key: "nature",
+        header: "Natureza",
+        cellClassName: "text-slate-700",
+        render: (kit) => kit.nature,
+      },
+      {
+        key: "totalQty",
+        header: "Peças",
+        align: "center",
+        cellClassName: "text-slate-700",
+        render: (kit) => kit.totalQty || kit._count.items,
+      },
+      {
+        key: "grandTotal",
+        header: "Total",
+        align: "right",
+        cellClassName: "font-medium text-slate-800 tabular-nums",
+        render: (kit) => formatBRL(parseDecimal(kit.grandTotal)),
+      },
+      {
+        key: "reseller",
+        header: "Revendedora",
+        cellClassName: "text-slate-600",
+        render: (kit) => kit.reseller?.name || "-",
+      },
+      {
+        key: "status",
+        header: "Status",
+        render: (kit) => (
+          <span
+            className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(kit)}`}
+          >
+            {getStatusLabel(kit)}
+          </span>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const renderKitMobileCard = (kit: KitSummary) => (
+    <article className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="flex items-center gap-2 p-3 bg-slate-50 border-b border-slate-100">
+        <button
+          type="button"
+          onClick={() => openKitDetail(kit.id)}
+          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition"
+          aria-label="Ver"
+        >
+          <FiEye size={18} />
+        </button>
+        <Link
+          href={`/kit?edit=${kit.id}`}
+          className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition"
+          aria-label="Editar"
+        >
+          <FiEdit2 size={18} />
+        </Link>
+        <button
+          type="button"
+          onClick={() => handleDelete(kit.id, kit.kitNumber)}
+          className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition"
+          aria-label="Excluir"
+        >
+          <FiTrash2 size={18} />
+        </button>
+        <span className="ml-auto font-bold text-[#b8860b]">#{kit.kitNumber}</span>
+      </div>
+      <div className="p-4 space-y-2">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
+          <span>{formatDate(kit.issueDate)} → {formatDate(kit.returnDate)}</span>
+          <span>{kit.nature}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm text-slate-600">
+            {kit.reseller?.name || "Sem revendedora"} · {kit.totalQty || kit._count.items} peças
+          </div>
+          <span className="font-semibold text-slate-900">
+            {formatBRL(parseDecimal(kit.grandTotal))}
+          </span>
+        </div>
+        <span
+          className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(kit)}`}
+        >
+          {getStatusLabel(kit)}
+        </span>
+      </div>
+    </article>
+  );
+
   return (
     <RequireAuth>
       <MainLayout>
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-8">
-          <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-4 sm:p-6 lg:p-8">
+          <div className="mb-6 sm:mb-8 flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-4xl font-bold text-slate-900 mb-2">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 mb-2">
                 Kits Montados
               </h1>
-              <p className="text-slate-600">
+              <p className="text-sm sm:text-base text-slate-600">
                 Visualize, consulte e gerencie os kits já salvos.
               </p>
             </div>
@@ -207,104 +351,20 @@ export default function KitsMontados() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-700">
-                  <tr>
-                    <th className="px-4 py-3">Nº Kit</th>
-                    <th className="px-4 py-3">Emissão</th>
-                    <th className="px-4 py-3">Devolução</th>
-                    <th className="px-4 py-3">Natureza</th>
-                    <th className="px-4 py-3 text-center">Peças</th>
-                    <th className="px-4 py-3 text-right">Total</th>
-                    <th className="px-4 py-3">Revendedora</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoading ? (
-                    <tr>
-                      <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
-                        Carregando kits...
-                      </td>
-                    </tr>
-                  ) : filteredKits.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
-                        {search
-                          ? "Nenhum kit encontrado para essa busca."
-                          : "Nenhum kit montado ainda."}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredKits.map((kit, idx) => (
-                      <tr
-                        key={kit.id}
-                        className={`border-t ${
-                          idx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                        } hover:bg-slate-100`}
-                      >
-                        <td className="px-4 py-3 font-bold text-[#b8860b]">
-                          #{kit.kitNumber}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {formatDate(kit.issueDate)}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {formatDate(kit.returnDate)}
-                        </td>
-                        <td className="px-4 py-3 text-slate-700">{kit.nature}</td>
-                        <td className="px-4 py-3 text-center text-slate-700">
-                          {kit.totalQty || kit._count.items}
-                        </td>
-                        <td className="px-4 py-3 text-right font-medium text-slate-800">
-                          {formatBRL(parseDecimal(kit.grandTotal))}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {kit.reseller?.name || "-"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(kit)}`}
-                          >
-                            {getStatusLabel(kit)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2 flex-wrap">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="text-sm px-3 py-1"
-                              onClick={() => openKitDetail(kit.id)}
-                            >
-                              Ver
-                            </Button>
-                            <Link
-                              href={`/kit?edit=${kit.id}`}
-                              className="inline-flex text-sm px-3 py-1 border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 shadow-sm rounded-md"
-                            >
-                              Editar
-                            </Link>
-                            <Button
-                              type="button"
-                              variant="danger"
-                              className="text-sm px-3 py-1"
-                              onClick={() => handleDelete(kit.id, kit.kitNumber)}
-                            >
-                              Excluir
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DataTable
+            data={filteredKits}
+            columns={kitColumns}
+            rowKey={(kit) => kit.id}
+            isLoading={isLoading}
+            emptyMessage={
+              search
+                ? "Nenhum kit encontrado para essa busca."
+                : "Nenhum kit montado ainda."
+            }
+            loadingMessage="Carregando kits..."
+            minWidth="960px"
+            mobileCardRender={renderKitMobileCard}
+          />
 
           <Modal
             open={showDetail}
