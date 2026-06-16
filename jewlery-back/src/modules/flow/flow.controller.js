@@ -1,4 +1,9 @@
 import prisma from "../../database/prismaClient.js";
+import {
+  getBusinessDetailByCardId,
+  updateBusinessUnitByCardId,
+} from "./flow.business.service.js";
+import { ensureKitUnits } from "./flow.utils.js";
 
 function parseSafeId(value, fieldName) {
   const parsed = Number.parseInt(String(value), 10);
@@ -315,6 +320,8 @@ async function createBusiness(req, res) {
         },
       });
 
+      await ensureKitUnits(tx, kit.id);
+
       return card;
     });
 
@@ -322,6 +329,65 @@ async function createBusiness(req, res) {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "internal error" });
+  }
+}
+
+async function getBusinessDetail(req, res) {
+  try {
+    const { cardId } = req.params;
+    const parsed = parseSafeId(cardId, "cardId");
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const detail = await getBusinessDetailByCardId(parsed.value);
+    res.json(detail);
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({
+      error: err.message || "internal error",
+    });
+  }
+}
+
+async function updateBusinessUnitStatus(req, res) {
+  try {
+    const { cardId, unitId } = req.params;
+    const { field, value } = req.body;
+
+    const parsedCardId = parseSafeId(cardId, "cardId");
+    if (parsedCardId.error) {
+      return res.status(400).json({ error: parsedCardId.error });
+    }
+
+    const parsedUnitId = parseSafeId(unitId, "unitId");
+    if (parsedUnitId.error) {
+      return res.status(400).json({ error: parsedUnitId.error });
+    }
+
+    if (field !== "owner" && field !== "reseller" && field !== "missing") {
+      return res
+        .status(400)
+        .json({ error: 'field deve ser "owner", "reseller" ou "missing"' });
+    }
+
+    if (typeof value !== "boolean") {
+      return res.status(400).json({ error: "value deve ser boolean" });
+    }
+
+    const result = await updateBusinessUnitByCardId(
+      parsedCardId.value,
+      parsedUnitId.value,
+      field,
+      value
+    );
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({
+      error: err.message || "internal error",
+    });
   }
 }
 
@@ -478,8 +544,10 @@ export {
   getBoard,
   getBoardById,
   getBoards,
+  getBusinessDetail,
   moveCard,
   reorderSteps,
   requireToken,
+  updateBusinessUnitStatus,
   updateStep,
 };

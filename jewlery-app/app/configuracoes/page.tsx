@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { apiUrl } from "@/lib/api";
-import { formatMultiplier, ProfitMargin } from "@/lib/pricing";
+import { formatMultiplier, ProfitMargin, CommissionTier, formatCommissionRate, formatCurrency } from "@/lib/pricing";
 import Button from "../components/Button";
 import DataTable, { DataTableColumn } from "../components/DataTable";
 import MainLayout from "../components/MainLayout";
@@ -11,7 +11,7 @@ import Modal from "../components/Modal";
 import RequireAuth from "../components/RequireAuth";
 import TableActions from "../components/TableActions";
 
-type TabId = "categories" | "platings" | "suppliers" | "profitMargins";
+type TabId = "categories" | "platings" | "suppliers" | "profitMargins" | "commissionTiers";
 
 interface NamedItem {
   id: number;
@@ -23,13 +23,14 @@ interface Supplier extends NamedItem {
   phone: string | null;
 }
 
-type ConfigItem = NamedItem | Supplier | ProfitMargin;
+type ConfigItem = NamedItem | Supplier | ProfitMargin | CommissionTier;
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "categories", label: "Categorias" },
   { id: "platings", label: "Tipos de Banho" },
   { id: "suppliers", label: "Fornecedores" },
   { id: "profitMargins", label: "Margem de Lucro" },
+  { id: "commissionTiers", label: "Comissão Revendedora" },
 ];
 
 const API_PATHS: Record<TabId, string> = {
@@ -37,6 +38,7 @@ const API_PATHS: Record<TabId, string> = {
   platings: "/platings",
   suppliers: "/suppliers",
   profitMargins: "/profit-margins",
+  commissionTiers: "/commission-tiers",
 };
 
 const fieldInputClass =
@@ -48,6 +50,7 @@ export default function ConfiguracoesPage() {
   const [platings, setPlatings] = useState<NamedItem[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [profitMargins, setProfitMargins] = useState<ProfitMargin[]>([]);
+  const [commissionTiers, setCommissionTiers] = useState<CommissionTier[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,6 +62,9 @@ export default function ConfiguracoesPage() {
     phone: "",
     level: "",
     multiplier: "",
+    maxAmount: "",
+    ratePercent: "",
+    sortOrder: "",
   });
 
   const tabLabels: Record<
@@ -89,10 +95,25 @@ export default function ConfiguracoesPage() {
       empty: "Nenhuma margem configurada.",
       subtitle: "Multiplicadores aplicados ao custo por peça na tabela de preços",
     },
+    commissionTiers: {
+      title: "Tabela de Comissão",
+      singular: "Faixa",
+      empty: "Nenhuma faixa de comissão configurada.",
+      subtitle: "Percentual de comissão da revendedora conforme o valor vendido no negócio",
+    },
   };
 
   function resetForm() {
-    setFormData({ name: "", email: "", phone: "", level: "", multiplier: "" });
+    setFormData({
+      name: "",
+      email: "",
+      phone: "",
+      level: "",
+      multiplier: "",
+      maxAmount: "",
+      ratePercent: "",
+      sortOrder: "",
+    });
     setEditingId(null);
   }
 
@@ -108,6 +129,7 @@ export default function ConfiguracoesPage() {
       if (tab === "platings") setPlatings(data);
       if (tab === "suppliers") setSuppliers(data);
       if (tab === "profitMargins") setProfitMargins(data);
+      if (tab === "commissionTiers") setCommissionTiers(data);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Erro ao carregar dados"
@@ -124,16 +146,32 @@ export default function ConfiguracoesPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   }
 
-  function handleEdit(item: NamedItem | Supplier | ProfitMargin) {
+  function handleEdit(item: ConfigItem) {
     setEditingId(item.id);
 
-    if ("multiplier" in item) {
+    if ("multiplier" in item && "level" in item) {
+      const margin = item as ProfitMargin;
       setFormData({
-        name: item.name || "",
+        name: margin.name || "",
         email: "",
         phone: "",
-        level: String(item.level),
-        multiplier: String(item.multiplier),
+        level: String(margin.level),
+        multiplier: String(margin.multiplier),
+        maxAmount: "",
+        ratePercent: "",
+        sortOrder: "",
+      });
+    } else if ("rate" in item && "maxAmount" in item) {
+      const tier = item as CommissionTier;
+      setFormData({
+        name: tier.label || "",
+        email: "",
+        phone: "",
+        level: "",
+        multiplier: "",
+        maxAmount: String(tier.maxAmount),
+        ratePercent: String(Number(tier.rate) * 100),
+        sortOrder: String(tier.sortOrder),
       });
     } else {
       setFormData({
@@ -142,6 +180,9 @@ export default function ConfiguracoesPage() {
         phone: "phone" in item ? item.phone || "" : "",
         level: "",
         multiplier: "",
+        maxAmount: "",
+        ratePercent: "",
+        sortOrder: "",
       });
     }
 
@@ -171,6 +212,21 @@ export default function ConfiguracoesPage() {
       }
     }
 
+    if (activeTab === "commissionTiers") {
+      const maxAmount = Number(formData.maxAmount.replace(",", "."));
+      const ratePercent = Number(formData.ratePercent.replace(",", "."));
+
+      if (!Number.isFinite(maxAmount) || maxAmount <= 0) {
+        toast.error("Informe um valor máximo válido");
+        return;
+      }
+
+      if (!Number.isFinite(ratePercent) || ratePercent <= 0 || ratePercent > 100) {
+        toast.error("Informe uma comissão entre 1% e 100%");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -192,6 +248,15 @@ export default function ConfiguracoesPage() {
           name: formData.name,
           level: Number(formData.level),
           multiplier: Number(formData.multiplier.replace(",", ".")),
+        };
+      } else if (activeTab === "commissionTiers") {
+        body = {
+          label: formData.name.trim(),
+          maxAmount: Number(formData.maxAmount.replace(",", ".")),
+          rate: Number(formData.ratePercent.replace(",", ".")) / 100,
+          sortOrder: formData.sortOrder
+            ? Number(formData.sortOrder)
+            : Number(formData.maxAmount.replace(",", ".")),
         };
       } else {
         body = { name: formData.name };
@@ -293,6 +358,22 @@ export default function ConfiguracoesPage() {
     });
   }, [profitMargins, search]);
 
+  const filteredCommissionTiers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return commissionTiers;
+    return commissionTiers.filter((item) => {
+      const haystack = [
+        item.label,
+        String(item.maxAmount),
+        String(item.rate),
+        String(item.sortOrder),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [commissionTiers, search]);
+
   const itemCount =
     activeTab === "categories"
       ? filteredCategories.length
@@ -300,7 +381,9 @@ export default function ConfiguracoesPage() {
       ? filteredPlatings.length
       : activeTab === "suppliers"
       ? filteredSuppliers.length
-      : filteredProfitMargins.length;
+      : activeTab === "profitMargins"
+      ? filteredProfitMargins.length
+      : filteredCommissionTiers.length;
 
   const totalCount =
     activeTab === "categories"
@@ -309,19 +392,23 @@ export default function ConfiguracoesPage() {
       ? platings.length
       : activeTab === "suppliers"
       ? suppliers.length
-      : profitMargins.length;
+      : activeTab === "profitMargins"
+      ? profitMargins.length
+      : commissionTiers.length;
 
   const currentData = useMemo(() => {
     if (activeTab === "categories") return filteredCategories;
     if (activeTab === "platings") return filteredPlatings;
     if (activeTab === "suppliers") return filteredSuppliers;
-    return filteredProfitMargins;
+    if (activeTab === "profitMargins") return filteredProfitMargins;
+    return filteredCommissionTiers;
   }, [
     activeTab,
     filteredCategories,
     filteredPlatings,
     filteredSuppliers,
     filteredProfitMargins,
+    filteredCommissionTiers,
   ]);
 
   const actionsColumn = {
@@ -330,7 +417,7 @@ export default function ConfiguracoesPage() {
     align: "center" as const,
     headerClassName: "sticky left-0 z-20 bg-slate-800 w-[88px]",
     cellClassName: "sticky left-0 z-10 bg-white",
-    render: (item: NamedItem | Supplier | ProfitMargin) => (
+    render: (item: ConfigItem) => (
       <TableActions
         onEdit={() => handleEdit(item)}
         onDelete={() => handleDelete(item.id)}
@@ -346,7 +433,9 @@ export default function ConfiguracoesPage() {
             key: "name",
             header: "Nome",
             render: (item) => (
-              <span className="font-medium text-slate-900">{item.name}</span>
+              <span className="font-medium text-slate-900">
+                {"name" in item ? item.name : ""}
+              </span>
             ),
           },
           {
@@ -390,7 +479,9 @@ export default function ConfiguracoesPage() {
             key: "name",
             header: "Nome",
             render: (item) => (
-              <span className="font-medium text-slate-900">{item.name}</span>
+              <span className="font-medium text-slate-900">
+                {"name" in item ? item.name : ""}
+              </span>
             ),
           },
           {
@@ -417,13 +508,66 @@ export default function ConfiguracoesPage() {
         ];
       }
 
+      if (activeTab === "commissionTiers") {
+        return [
+          actionsColumn,
+          {
+            key: "sortOrder",
+            header: "Ordem",
+            align: "center",
+            headerClassName: "w-20",
+            render: (item) =>
+              "sortOrder" in item ? (
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#b8860b]/10 text-xs font-bold text-[#9a7209]">
+                  {item.sortOrder}
+                </span>
+              ) : null,
+          },
+          {
+            key: "label",
+            header: "Faixa",
+            render: (item) => (
+              <span className="font-medium text-slate-900">
+                {"label" in item ? item.label : ""}
+              </span>
+            ),
+          },
+          {
+            key: "maxAmount",
+            header: "Até valor vendido",
+            align: "right",
+            render: (item) =>
+              "maxAmount" in item ? (
+                <span className="tabular-nums text-slate-700">
+                  {item.maxAmount >= 999999999
+                    ? "Acima das demais faixas"
+                    : formatCurrency(item.maxAmount)}
+                </span>
+              ) : null,
+          },
+          {
+            key: "rate",
+            header: "Comissão",
+            align: "right",
+            render: (item) =>
+              "rate" in item ? (
+                <span className="font-semibold text-[#9a7209] tabular-nums">
+                  {formatCommissionRate(item.rate)}
+                </span>
+              ) : null,
+          },
+        ];
+      }
+
       return [
         actionsColumn,
         {
           key: "name",
           header: "Nome",
           render: (item) => (
-            <span className="font-medium text-slate-900">{item.name}</span>
+            <span className="font-medium text-slate-900">
+              {"name" in item ? item.name : ""}
+            </span>
           ),
         },
       ];
@@ -479,6 +623,35 @@ export default function ConfiguracoesPage() {
       );
     }
 
+    if (activeTab === "commissionTiers") {
+      const tier = item as CommissionTier;
+      return (
+        <article className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="flex items-center gap-2 p-3 bg-slate-50 border-b border-slate-100">
+            <TableActions
+              onEdit={() => handleEdit(tier)}
+              onDelete={() => handleDelete(tier.id)}
+              compact={false}
+            />
+            <span className="ml-auto text-xs font-mono text-slate-500">
+              Ordem {tier.sortOrder}
+            </span>
+          </div>
+          <div className="p-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-slate-900">{tier.label}</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Até {tier.maxAmount >= 999999999 ? "valor acima das faixas" : formatCurrency(tier.maxAmount)}
+              </p>
+            </div>
+            <span className="text-lg font-bold text-[#9a7209] tabular-nums">
+              {formatCommissionRate(tier.rate)}
+            </span>
+          </div>
+        </article>
+      );
+    }
+
     const named = item as NamedItem;
     return (
       <article className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -503,7 +676,7 @@ export default function ConfiguracoesPage() {
               Configurações
             </h1>
             <p className="text-sm sm:text-base text-slate-600">
-              Gerencie categorias, banhos, fornecedores e margens de lucro.
+              Gerencie categorias, banhos, fornecedores, margens e comissão.
             </p>
           </div>
 
@@ -566,7 +739,13 @@ export default function ConfiguracoesPage() {
             rowKey={(item) => item.id}
             isLoading={isLoading}
             emptyMessage={tabLabels[activeTab].empty}
-            minWidth={activeTab === "suppliers" ? "640px" : activeTab === "profitMargins" ? "560px" : undefined}
+            minWidth={
+              activeTab === "suppliers"
+                ? "640px"
+                : activeTab === "profitMargins" || activeTab === "commissionTiers"
+                ? "560px"
+                : undefined
+            }
             mobileCardRender={renderMobileCard}
           />
 
@@ -622,9 +801,61 @@ export default function ConfiguracoesPage() {
                 </div>
               )}
 
+              {activeTab === "commissionTiers" && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Valor máximo (R$) *
+                    </label>
+                    <input
+                      type="number"
+                      name="maxAmount"
+                      step="0.01"
+                      min="0.01"
+                      value={formData.maxAmount}
+                      onChange={handleChange}
+                      required
+                      className={fieldInputClass}
+                      placeholder="500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Comissão (%) *
+                    </label>
+                    <input
+                      type="number"
+                      name="ratePercent"
+                      step="0.1"
+                      min="0.1"
+                      max="100"
+                      value={formData.ratePercent}
+                      onChange={handleChange}
+                      required
+                      className={fieldInputClass}
+                      placeholder="20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Ordem
+                    </label>
+                    <input
+                      type="number"
+                      name="sortOrder"
+                      min={1}
+                      value={formData.sortOrder}
+                      onChange={handleChange}
+                      className={fieldInputClass}
+                      placeholder="1"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Nome *
+                  {activeTab === "commissionTiers" ? "Nome da faixa *" : "Nome *"}
                 </label>
                 <input
                   type="text"

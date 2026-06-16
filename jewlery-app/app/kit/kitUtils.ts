@@ -1,4 +1,9 @@
 import { apiUrl } from "@/lib/api";
+import {
+  CommissionTier,
+  resolveCommissionLabel as resolveLabel,
+  resolveCommissionRate as resolveRate,
+} from "@/lib/pricing";
 
 export interface NamedItem {
   id: number;
@@ -122,18 +127,18 @@ export function groupItemsByCategory(items: KitLineItem[]): CategoryGroup[] {
     .sort((a, b) => a.category.localeCompare(b.category, "pt-BR"));
 }
 
-export function getCommissionRate(total: number): number {
-  if (total <= 500) return 0.25;
-  if (total <= 1000) return 0.3;
-  if (total <= 1600) return 0.35;
-  return 0.4;
+export function getCommissionRate(
+  total: number,
+  tiers: CommissionTier[] = []
+): number {
+  return resolveRate(total, tiers);
 }
 
-export function getCommissionLabel(total: number): string {
-  if (total <= 500) return "Até R$ 500,00";
-  if (total <= 1000) return "R$ 501,00 a R$ 1.000,00";
-  if (total <= 1600) return "R$ 1.001,00 a R$ 1.600,00";
-  return "Acima de R$ 1.601,00";
+export function getCommissionLabel(
+  total: number,
+  tiers: CommissionTier[] = []
+): string {
+  return resolveLabel(total, tiers);
 }
 
 export function createLineFromProduct(product: Product): KitLineItem {

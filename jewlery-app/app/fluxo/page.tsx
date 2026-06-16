@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { apiUrl } from "@/lib/api";
 import { FiEdit2, FiTrash2 } from "react-icons/fi";
@@ -10,7 +10,10 @@ import Select from "react-select";
 import Swal from "sweetalert2";
 import MainLayout from "../components/MainLayout";
 import Modal from "../components/Modal";
+import BusinessKitPanel from "../components/BusinessKitPanel";
 import RequireAuth from "../components/RequireAuth";
+import { formatBRL } from "../kit/kitUtils";
+import { BusinessDetail } from "@/lib/business";
 type CreateBoardState = { name: string };
 
 type Step = {
@@ -96,6 +99,14 @@ export default function FluxoPage() {
   const [selectedResellerId, setSelectedResellerId] = useState("");
   const [loadingBusinessData, setLoadingBusinessData] = useState(false);
   const [creatingBusiness, setCreatingBusiness] = useState(false);
+
+  const [businessOpen, setBusinessOpen] = useState(false);
+  const [businessDetail, setBusinessDetail] = useState<BusinessDetail | null>(
+    null
+  );
+  const [loadingBusinessDetail, setLoadingBusinessDetail] = useState(false);
+  const [updatingUnitId, setUpdatingUnitId] = useState<number | null>(null);
+  const dragMovedRef = useRef(false);
 
   const authHeader = useMemo(
     () => ({
@@ -200,6 +211,72 @@ export default function FluxoPage() {
       toast.error(e instanceof Error ? e.message : "Erro ao criar negócio");
     } finally {
       setCreatingBusiness(false);
+    }
+  }
+
+  async function openBusinessDetail(card: Card) {
+    if (!card.kitId) {
+      toast.error("Este card não possui kit vinculado");
+      return;
+    }
+
+    setBusinessOpen(true);
+    setLoadingBusinessDetail(true);
+    setBusinessDetail(null);
+
+    try {
+      const res = await fetch(`${apiUrl}/flow/business/${card.id}`, {
+        headers: authHeader,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Erro ao carregar negócio");
+      }
+      setBusinessDetail(data);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao carregar negócio");
+      setBusinessOpen(false);
+    } finally {
+      setLoadingBusinessDetail(false);
+    }
+  }
+
+  async function toggleUnitStatus(
+    unitId: number,
+    field: "owner" | "reseller" | "missing",
+    value: boolean
+  ) {
+    if (!businessDetail) return;
+
+    setUpdatingUnitId(unitId);
+    try {
+      const res = await fetch(
+        `${apiUrl}/flow/business/${businessDetail.id}/units/${unitId}`,
+        {
+          method: "PATCH",
+          headers: authHeader,
+          body: JSON.stringify({ field, value }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Erro ao atualizar peça");
+      }
+
+      setBusinessDetail((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          units: prev.units.map((unit) =>
+            unit.id === unitId ? data.unit : unit
+          ),
+          summary: data.summary,
+        };
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao atualizar peça");
+    } finally {
+      setUpdatingUnitId(null);
     }
   }
 
@@ -779,9 +856,21 @@ export default function FluxoPage() {
                       <div
                         key={c.id}
                         draggable
-                        onDragStart={() => handleDragStart(c.id)}
+                        onDragStart={() => {
+                          dragMovedRef.current = false;
+                          handleDragStart(c.id);
+                        }}
+                        onDrag={() => {
+                          dragMovedRef.current = true;
+                        }}
                         onDragEnd={handleDragEnd}
-                        className="bg-slate-50 border border-slate-200 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:bg-slate-100"
+                        onClick={() => {
+                          if (dragMovedRef.current) return;
+                          if (c.kitId) openBusinessDetail(c);
+                        }}
+                        className={`bg-slate-50 border border-slate-200 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:bg-slate-100 transition ${
+                          c.kitId ? "hover:border-[#b8860b]/40" : ""
+                        }`}
                       >
                         <div className="text-sm font-semibold text-slate-900">
                           {c.title}
@@ -794,6 +883,11 @@ export default function FluxoPage() {
                         {c.description ? (
                           <div className="text-xs text-slate-500 mt-1 line-clamp-2">
                             {c.description}
+                          </div>
+                        ) : null}
+                        {c.kitId ? (
+                          <div className="text-[10px] text-slate-400 mt-2 uppercase tracking-wide">
+                            Clique para abrir o negócio
                           </div>
                         ) : null}
                       </div>
@@ -1171,6 +1265,29 @@ export default function FluxoPage() {
                 </button>
               </div>
             </div>
+          </Modal>
+
+          <Modal
+            open={businessOpen}
+            title={businessDetail?.title ?? "Negócio"}
+            size="2xl"
+            onClose={() => {
+              setBusinessOpen(false);
+              setBusinessDetail(null);
+            }}
+          >
+            {loadingBusinessDetail ? (
+              <p className="text-sm text-slate-500 py-8 text-center">
+                Carregando kit...
+              </p>
+            ) : businessDetail ? (
+              <BusinessKitPanel
+                detail={businessDetail}
+                mode="admin"
+                updatingUnitId={updatingUnitId}
+                onToggleUnit={toggleUnitStatus}
+              />
+            ) : null}
           </Modal>
         </div>
       </MainLayout>

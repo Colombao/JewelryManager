@@ -9,8 +9,10 @@ import {
   getBoard,
   getBoardById,
   getBoards,
+  getBusinessDetail,
   moveCard,
   reorderSteps,
+  updateBusinessUnitStatus,
   updateStep,
 } from "./flow.controller.js";
 
@@ -32,6 +34,8 @@ router.put("/steps/:stepId", updateStep);
 router.delete("/steps/:stepId", deleteStep);
 router.post("/cards", createCard);
 router.post("/business", createBusiness);
+router.get("/business/:cardId", getBusinessDetail);
+router.patch("/business/:cardId/units/:unitId", updateBusinessUnitStatus);
 router.post("/cards/:cardId/move", moveCard);
 
 export default router;

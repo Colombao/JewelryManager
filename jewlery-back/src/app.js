@@ -14,6 +14,8 @@ import productsRoutes from "./modules/products/products.routes.js";
 import resellersRoutes from "./modules/resellers/resellers.routes.js";
 import supplierRoutes from "./modules/supplier/supplier.route.js";
 import profitMarginRoutes from "./modules/profit-margin/profit-margin.route.js";
+import commissionTierRoutes from "./modules/commission-tier/commission-tier.route.js";
+import resellerPortalRoutes from "./modules/reseller-portal/reseller-portal.routes.js";
 import trendsRoutes from "./modules/trends/trends.routes.js";
 import uploadRoutes from "./modules/upload/upload.routes.js";
 import { ensureUploadDirectories, uploadRoot } from "./config/uploads.js";
@@ -87,14 +89,19 @@ app.post("/auth/login", async (req, res) => {
     if (!valid) return res.status(401).json({ error: "invalid credentials" });
 
     const token = jwt.sign(
-      { sub: user.id, email: user.email },
+      { sub: user.id, email: user.email, type: "admin" },
       process.env.JWT_SECRET || "dev_secret",
       { expiresIn: "7d" }
     );
 
     res.json({
       token,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: "admin",
+      },
     });
   } catch (err) {
     console.error(err);
@@ -135,6 +142,8 @@ app.use("/categories", categoryRoutes);
 app.use("/collections", collectionRoutes);
 app.use("/platings", platingRoutes);
 app.use("/profit-margins", profitMarginRoutes);
+app.use("/commission-tiers", commissionTierRoutes);
+app.use("/reseller-portal", resellerPortalRoutes);
 app.use("/products", productsRoutes);
 app.use("/kits", kitsRoutes);
 app.use("/upload", uploadRoutes);

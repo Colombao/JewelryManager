@@ -29,6 +29,7 @@ import {
   productMatchesSearch,
   resolveImageUrl,
 } from "./kitUtils";
+import { CommissionTier } from "@/lib/pricing";
 
 const PAYMENT_OPTIONS = [
   { id: "avista", label: "À vista", discount: 0.03 },
@@ -67,6 +68,22 @@ export default function MontarKit() {
   const [extraItems, setExtraItems] = useState({ showcase: 0, ringHolder: 0, boxes: 0 });
   const [maxKitValue, setMaxKitValue] = useState(1600);
   const [categoryQty, setCategoryQty] = useState<Record<string, number>>({});
+  const [commissionTiers, setCommissionTiers] = useState<CommissionTier[]>([]);
+
+  useEffect(() => {
+    async function loadCommissionTiers() {
+      try {
+        const res = await fetch(`${apiUrl}/commission-tiers`);
+        if (res.ok) {
+          setCommissionTiers(await res.json());
+        }
+      } catch {
+        // usa faixas padrão do frontend
+      }
+    }
+
+    loadCommissionTiers();
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -207,7 +224,7 @@ export default function MontarKit() {
   );
 
   const grandTotal = productsSubtotal + extrasTotal;
-  const commissionRate = getCommissionRate(grandTotal);
+  const commissionRate = getCommissionRate(grandTotal, commissionTiers);
   const commissionValue = grandTotal * commissionRate;
   const paymentDiscount =
     PAYMENT_OPTIONS.find((p) => p.id === paymentType)?.discount ?? 0;
@@ -975,7 +992,7 @@ export default function MontarKit() {
                     <p className="text-xs font-semibold text-[#666] uppercase mb-2">
                       Comissionamento
                     </p>
-                    <p className="text-xs text-[#888] mb-1">{getCommissionLabel(grandTotal)}</p>
+                    <p className="text-xs text-[#888] mb-1">{getCommissionLabel(grandTotal, commissionTiers)}</p>
                     <div className="flex justify-between text-sm">
                       <span>{(commissionRate * 100).toFixed(0)}%</span>
                       <span className="font-semibold text-[#00a650]">

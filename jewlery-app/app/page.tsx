@@ -3,6 +3,7 @@
 import { useAuth } from "@/app/contexts/AuthContext";
 import { apiUrl } from "@/lib/api";
 import { Cormorant_Garamond } from "next/font/google";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { RiJewelryFill } from "react-icons/ri";
@@ -15,7 +16,7 @@ const displayFont = Cormorant_Garamond({
 
 export default function Home() {
   const router = useRouter();
-  const { login, token, isLoading } = useAuth();
+  const { login, token, user, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,9 +24,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!isLoading && token) {
-      router.replace("/fluxo");
+      router.replace(user?.role === "reseller" ? "/revendedora" : "/fluxo");
     }
-  }, [isLoading, token, router]);
+  }, [isLoading, token, user?.role, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,6 +235,13 @@ export default function Home() {
                 )}
               </button>
             </form>
+
+            <p className="mt-5 text-center text-sm text-slate-500">
+              É revendedora?{" "}
+              <Link href="/revendedora/login" className="font-medium text-[#9a7209] hover:underline">
+                Acessar portal do kit
+              </Link>
+            </p>
           </div>
         </div>
       </div>

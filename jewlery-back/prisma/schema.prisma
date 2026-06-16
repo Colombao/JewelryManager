@@ -203,7 +203,38 @@ model KitItem {
   lineTotal   Decimal  @db.Decimal(10, 2)
   sortOrder   Int      @default(0)
 
+  units       KitItemUnit[]
+
   createdAt   DateTime @default(now())
+}
+
+model KitItemUnit {
+  id             Int      @id @default(autoincrement())
+  kitItemId      Int
+  kitItem        KitItem  @relation(fields: [kitItemId], references: [id], onDelete: Cascade)
+
+  unitIndex      Int      @default(1)
+  unitPrice      Decimal  @db.Decimal(10, 2)
+
+  soldByOwner    Boolean  @default(false)
+  soldByReseller Boolean  @default(false)
+  missingOrLost  Boolean  @default(false)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([kitItemId, unitIndex])
+}
+
+model CommissionTier {
+  id         Int      @id @default(autoincrement())
+  label      String   @db.VarChar(120)
+  maxAmount  Decimal  @db.Decimal(10, 2)
+  rate       Decimal  @db.Decimal(5, 4)
+  sortOrder  Int      @default(0)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Trend {

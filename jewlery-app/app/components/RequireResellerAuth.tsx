@@ -4,7 +4,11 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { ReactNode, useEffect } from "react";
 
-export default function RequireAuth({ children }: { children: ReactNode }) {
+export default function RequireResellerAuth({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const router = useRouter();
   const { token, user, isLoading } = useAuth();
 
@@ -12,16 +16,17 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
     if (isLoading) return;
 
     if (!token) {
-      router.replace("/", { scroll: false });
+      router.replace("/revendedora/login", { scroll: false });
       return;
     }
 
-    if (user?.role === "reseller") {
-      router.replace("/revendedora", { scroll: false });
+    if (user?.role !== "reseller") {
+      router.replace(user?.role === "admin" ? "/fluxo" : "/", { scroll: false });
     }
   }, [isLoading, token, user?.role, router]);
 
   if (isLoading) return null;
-  if (!token || user?.role === "reseller") return null;
+  if (!token || user?.role !== "reseller") return null;
+
   return <>{children}</>;
 }
