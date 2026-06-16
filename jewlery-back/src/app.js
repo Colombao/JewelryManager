@@ -3,8 +3,6 @@ import cors from "cors";
 import "dotenv/config";
 import express from "express";
 import jwt from "jsonwebtoken";
-import path from "path";
-import { fileURLToPath } from "url";
 import prisma from "./database/prismaClient.js";
 import categoryRoutes from "./modules/category/category.route.js";
 import collectionRoutes from "./modules/collection/collection.route.js";
@@ -17,14 +15,16 @@ import resellersRoutes from "./modules/resellers/resellers.routes.js";
 import supplierRoutes from "./modules/supplier/supplier.route.js";
 import trendsRoutes from "./modules/trends/trends.routes.js";
 import uploadRoutes from "./modules/upload/upload.routes.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { ensureUploadDirectories, uploadRoot } from "./config/uploads.js";
 
 const app = express();
 
+ensureUploadDirectories();
+console.log(`📁 Uploads servidos de: ${uploadRoot}`);
+
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use("/uploads", express.static(uploadRoot));
 
 // Register (optional helper route)
 app.post("/auth/register", async (req, res) => {

@@ -1,18 +1,16 @@
 import express from "express";
 import multer from "multer";
 import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
+import {
+  ensureUploadDirectories,
+  getProductImagePublicPath,
+  productsUploadDir,
+} from "../../config/uploads.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadDir = path.join(__dirname, "../../../uploads/products");
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+ensureUploadDirectories();
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
+  destination: (_req, _file, cb) => cb(null, productsUploadDir),
   filename: (_req, file, cb) => {
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     const ext = path.extname(file.originalname).toLowerCase();
@@ -40,7 +38,7 @@ router.post("/product-image", upload.single("image"), (req, res) => {
       return res.status(400).json({ error: "Nenhuma imagem enviada" });
     }
 
-    const url = `/uploads/products/${req.file.filename}`;
+    const url = getProductImagePublicPath(req.file.filename);
     return res.status(201).json({ url, filename: req.file.filename });
   } catch (error) {
     return res.status(500).json({ error: "Erro ao fazer upload da imagem" });
