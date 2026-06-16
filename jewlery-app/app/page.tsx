@@ -1,17 +1,32 @@
 "use client";
 
+import { useAuth } from "@/app/contexts/AuthContext";
+import { Cormorant_Garamond } from "next/font/google";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { RiJewelryFill } from "react-icons/ri";
 import TextInput from "./components/TextInput";
+
+const displayFont = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 
 export default function Home() {
   const router = useRouter();
+  const { login, token, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+
+  useEffect(() => {
+    if (!isLoading && token) {
+      router.replace("/fluxo");
+    }
+  }, [isLoading, token, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,10 +49,8 @@ export default function Home() {
         throw new Error(data?.error || "Não foi possível entrar.");
       }
 
-      localStorage.setItem("authToken", data.token);
-      localStorage.setItem("authUser", JSON.stringify(data.user));
-
-      router.push("/fluxo");
+      login(data.token, data.user);
+      router.replace("/fluxo");
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "Não foi possível entrar."
@@ -47,69 +60,88 @@ export default function Home() {
     }
   };
 
+  if (isLoading || token) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-400/30 border-t-amber-400" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#f3f7ff] flex items-center justify-center font-sans px-4">
-      <div className="flex flex-col items-center w-full max-w-3xl">
-        <div className="mt-14 mb-6">
-          <svg
-            width="56"
-            height="56"
-            viewBox="0 0 56 56"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden
-          >
-            <defs>
-              <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-                <stop offset="0%" stopColor="#60A5FA" />
-                <stop offset="100%" stopColor="#3B82F6" />
-              </linearGradient>
-            </defs>
-            <polygon
-              points="28,4 48,24 28,52 8,24"
-              fill="url(#g)"
-              stroke="#1e40af"
-              strokeWidth="1"
-            />
-            <path
-              d="M28 4 L36 24 L28 32 L20 24 Z"
-              fill="#93c5fd"
-              opacity="0.9"
-            />
-            <path
-              d="M28 32 L36 24 L48 24 L28 52 Z"
-              fill="#3b82f6"
-              opacity="0.08"
-            />
-            <path
-              d="M28 4 L20 24 L8 24 L28 52 Z"
-              fill="#60a5fa"
-              opacity="0.06"
-            />
-          </svg>
+    <div className="min-h-screen flex">
+      {/* Painel esquerdo — branding */}
+      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800">
+        <div className="absolute inset-0 opacity-[0.07]">
+          <div className="absolute top-20 -left-20 h-72 w-72 rounded-full bg-amber-400 blur-3xl" />
+          <div className="absolute bottom-10 right-10 h-96 w-96 rounded-full bg-amber-600 blur-3xl" />
         </div>
 
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded-xl shadow-lg p-8">
-            <h2 className="text-center text-2xl font-semibold text-slate-700">
+        <div className="relative z-10 flex flex-col justify-between p-12 xl:p-16 w-full">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 shadow-lg shadow-amber-900/40">
+              <RiJewelryFill className="h-5 w-5 text-white" />
+            </div>
+            <span
+              className={`${displayFont.className} text-2xl font-semibold tracking-wide text-white`}
+            >
+              Jewelry
+            </span>
+          </div>
+
+          <div className="space-y-6">
+            <h1
+              className={`${displayFont.className} text-5xl xl:text-6xl font-semibold leading-tight text-white`}
+            >
+              Gestão elegante
+              <br />
+              <span className="text-amber-400">para joias</span>
+            </h1>
+            <p className="max-w-md text-base leading-relaxed text-slate-400">
+              Controle kits, revendedoras e fluxo de vendas com precisão e
+              sofisticação.
+            </p>
+          </div>
+
+          <p className="text-sm text-slate-600">
+            © {new Date().getFullYear()} Jewelry App
+          </p>
+        </div>
+      </div>
+
+      {/* Painel direito — formulário */}
+      <div className="flex flex-1 items-center justify-center bg-slate-50 px-6 py-12">
+        <div className="w-full max-w-[420px]">
+          <div className="mb-8 flex flex-col items-center lg:items-start">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-md shadow-amber-200 lg:hidden">
+              <RiJewelryFill className="h-6 w-6 text-white" />
+            </div>
+            <h2
+              className={`${displayFont.className} text-3xl font-semibold text-slate-900`}
+            >
               Bem-vindo
             </h2>
-            <p className="text-center text-sm text-slate-400 mt-2">
+            <p className="mt-2 text-sm text-slate-500">
               Insira suas credenciais para acessar sua conta.
             </p>
+          </div>
 
-            <form className="mt-6 space-y-4" onSubmit={handleLogin}>
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-8 shadow-xl shadow-slate-200/50">
+            <form className="space-y-5" onSubmit={handleLogin}>
               <label className="block">
-                <span className="sr-only">Email</span>
+                <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                  Email
+                </span>
                 <TextInput
                   id="email"
                   name="email"
                   type="email"
-                  placeholder="Digite seu email"
+                  placeholder="seu@email.com"
                   autoComplete="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="border-slate-200 bg-slate-50/50 focus:ring-amber-400/40 focus:border-amber-400"
                   icon={
                     <svg
                       width="16"
@@ -120,14 +152,14 @@ export default function Home() {
                     >
                       <path
                         d="M3 8.5v7A2.5 2.5 0 0 0 5.5 18h13A2.5 2.5 0 0 0 21 15.5v-7"
-                        stroke="#94a3b8"
+                        stroke="currentColor"
                         strokeWidth="1.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
                       <path
                         d="M21 8.5l-9 6-9-6"
-                        stroke="#94a3b8"
+                        stroke="currentColor"
                         strokeWidth="1.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -138,16 +170,19 @@ export default function Home() {
               </label>
 
               <label className="block">
-                <span className="sr-only">Password</span>
+                <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                  Senha
+                </span>
                 <TextInput
                   id="password"
                   name="password"
                   type="password"
-                  placeholder="Digite sua senha"
+                  placeholder="••••••••"
                   autoComplete="current-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="border-slate-200 bg-slate-50/50 focus:ring-amber-400/40 focus:border-amber-400"
                   icon={
                     <svg
                       width="16"
@@ -162,14 +197,14 @@ export default function Home() {
                         width="18"
                         height="10"
                         rx="2"
-                        stroke="#94a3b8"
+                        stroke="currentColor"
                         strokeWidth="1.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
                       <path
                         d="M7 11V8a5 5 0 0 1 10 0v3"
-                        stroke="#94a3b8"
+                        stroke="currentColor"
                         strokeWidth="1.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -180,26 +215,26 @@ export default function Home() {
               </label>
 
               {errorMessage && (
-                <p className="text-sm text-red-600 text-center">
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {errorMessage}
-                </p>
+                </div>
               )}
 
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full h-12 bg-gradient-to-b from-blue-500 to-blue-600 text-white rounded-md font-medium shadow-sm cursor-pointer hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-70"
+                className="w-full h-12 rounded-lg bg-gradient-to-r from-slate-900 to-slate-800 text-white font-medium shadow-md shadow-slate-900/20 cursor-pointer transition-all hover:from-slate-800 hover:to-slate-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSubmitting ? "Entrando..." : "Entrar"}
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    Entrando...
+                  </span>
+                ) : (
+                  "Entrar"
+                )}
               </button>
             </form>
-
-            {/* <div className="text-center mt-6 text-sm text-slate-400">
-              Esqueceu sua senha?{" "}
-              <a href="#" className="text-blue-600 font-medium">
-                Redefinir senha
-              </a>
-            </div> */}
           </div>
         </div>
       </div>

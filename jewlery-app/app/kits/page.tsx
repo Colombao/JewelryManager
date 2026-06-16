@@ -68,13 +68,13 @@ function formatDate(value: string) {
   return date.toLocaleDateString("pt-BR");
 }
 
-function getStatusLabel(kit: KitSummary) {
+function getStatusLabel(kit: Pick<KitSummary, "card" | "status">) {
   if (kit.card) return "No fluxo";
   if (kit.status === "montado") return "Montado";
   return kit.status;
 }
 
-function getStatusClass(kit: KitSummary) {
+function getStatusClass(kit: Pick<KitSummary, "card">) {
   if (kit.card) return "bg-blue-100 text-blue-800";
   return "bg-amber-100 text-amber-800";
 }

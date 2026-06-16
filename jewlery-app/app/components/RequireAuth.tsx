@@ -10,8 +10,6 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isLoading && !token) {
-      console.log("Usuário não autenticado, redirecionando para login...", isLoading, token);
-      // garante que a UI não fica “solta” antes do redirect
       router.replace("/", { scroll: false });
     }
   }, [isLoading, token, router]);

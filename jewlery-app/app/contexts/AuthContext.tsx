@@ -18,6 +18,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  login: (token: string, user: User) => void;
   logout: () => void;
 }
 
@@ -53,28 +54,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: true,
   });
 
-  // Carrega token/usuário somente no cliente após hidratação
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const storedToken = localStorage.getItem("authToken");
-    const storedUser = localStorage.getItem("authUser");
-
-    // logs temporários pra diagnosticar hydration/auth
-    // eslint-disable-next-line no-console
-    console.log("[AuthContext] localStorage.authToken:", storedToken);
-    // eslint-disable-next-line no-console
-    console.log("[AuthContext] localStorage.authUser:", storedUser);
-
     const { user, token } = getStoredAuthState();
     setState({
       user,
       token,
       isLoading: false,
     });
-
-    // eslint-disable-next-line no-console
-    console.log("[AuthContext] state set => token:", token);
   }, []);
+
+  const login = (token: string, user: User) => {
+    localStorage.setItem("authToken", token);
+    localStorage.setItem("authUser", JSON.stringify(user));
+    setState({
+      user,
+      token,
+      isLoading: false,
+    });
+  };
 
   const logout = () => {
     setState({
@@ -92,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: state.user,
         token: state.token,
         isLoading: state.isLoading,
+        login,
         logout,
       }}
     >
