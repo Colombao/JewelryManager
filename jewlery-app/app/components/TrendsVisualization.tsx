@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { apiUrl } from "@/lib/api";
 
 interface Trend {
   id: number;
@@ -24,7 +25,7 @@ export default function TrendsVisualization() {
 
   const fetchTrends = async () => {
     try {
-      const response = await fetch("http://localhost:3001/trends");
+      const response = await fetch(`${apiUrl}/trends`);
       if (!response.ok) throw new Error("Erro ao buscar tendências");
       const data = await response.json();
       setTrends(data);
@@ -37,7 +38,7 @@ export default function TrendsVisualization() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch("http://localhost:3001/trends/refresh", {
+      const response = await fetch(`${apiUrl}/trends/refresh`, {
         method: "POST",
       });
       if (!response.ok) throw new Error("Erro ao atualizar tendências");

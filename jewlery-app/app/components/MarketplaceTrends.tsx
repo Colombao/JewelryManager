@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { apiUrl } from "@/lib/api";
 
 interface MarketplaceTrend {
   posicao: number;
@@ -47,7 +48,7 @@ export default function MarketplaceTrends() {
     try {
       setLoading(true);
       const response = await fetch(
-        "http://localhost:3001/marketplace/trends-alta?limit=10"
+        `${apiUrl}/marketplace/trends-alta?limit=10`
       );
       if (!response.ok) throw new Error("Erro ao buscar tendências");
       const data: MarketplaceData = await response.json();

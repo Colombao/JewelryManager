@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const { protocol, hostname, port } = new URL(apiUrl);
+
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
@@ -12,9 +15,9 @@ const nextConfig: NextConfig = {
         hostname: "http2.mlstatic.com",
       },
       {
-        protocol: "http",
-        hostname: "localhost",
-        port: "3001",
+        protocol: protocol.replace(":", "") as "http" | "https",
+        hostname,
+        ...(port ? { port } : {}),
         pathname: "/uploads/**",
       },
     ],

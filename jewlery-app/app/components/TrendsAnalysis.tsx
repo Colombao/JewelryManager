@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiUrl } from "@/lib/api";
 
 interface Trend {
   keyword: string;
@@ -56,7 +57,7 @@ export default function TrendsAnalysis() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("http://localhost:3001/trends/analysis");
+      const response = await fetch(`${apiUrl}/trends/analysis`);
       if (!response.ok) throw new Error("Erro ao buscar análise");
       const data = await response.json();
       setAnalysis(data);
