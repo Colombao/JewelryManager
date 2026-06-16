@@ -6,7 +6,7 @@
 ---
 
 ## Resumo
-Este projeto apresenta o desenvolvimento de um ERP especializado para o setor de semi joias, integrado a um módulo inteligente de recomendação responsável por analisar tendências do mercado e gerar kits otimizados para venda. A solução utiliza Next.js, Node.js, Express e MySQL para entregar uma aplicação web moderna, escalável e orientada à eficiência comercial. Este documento aborda o propósito do projeto, sua justificativa, arquitetura, requisitos e diretrizes técnicas.
+Este projeto apresenta o desenvolvimento de um CRM especializado para o setor de semi joias, integrado a um módulo inteligente de recomendação responsável por analisar tendências do mercado e gerar kits otimizados para venda. A solução utiliza Next.js, Node.js, Express e MySQL para entregar uma aplicação web moderna, escalável e orientada à eficiência comercial. Este documento aborda o propósito do projeto, sua justificativa, arquitetura, requisitos e diretrizes técnicas.
 
 ---
 
@@ -23,12 +23,12 @@ Este projeto é relevante para Engenharia de Software por integrar:
 - Processamento de dados para recomendação  
 - Aplicação direta em um nicho real do mercado  
 
-A proposta preenche uma lacuna existente: ERPs especializados com recomendações inteligentes para semi joias.
+A proposta preenche uma lacuna existente: CRMs especializados com recomendações inteligentes para semi joias.
 
 ## Objetivos
 
 ### Objetivo Geral
-Desenvolver um ERP para gestão de semi joias integrado a um módulo de recomendação baseado em tendências do mercado.
+Desenvolver um CRM para gestão de semi joias integrado a um módulo de recomendação baseado em tendências do mercado.
 
 ### Objetivos Específicos
 - Criar módulo de cadastro e gerenciamento de produtos  
@@ -46,7 +46,7 @@ Desenvolver um ERP para gestão de semi joias integrado a um módulo de recomend
 Aplicações Web (Web Apps).
 
 ## Tema do Projeto
-Sistema ERP especializado em semi joias, com funcionalidades de gestão e motor inteligente de recomendação baseado em tendências.
+Sistema CRM especializado em semi joias, com funcionalidades de gestão e motor inteligente de recomendação baseado em tendências.
 
 ## Propósito e Uso Prático
 O projeto visa resolver dificuldades enfrentadas por lojistas na organização de produtos, composição de kits comerciais e análise de tendências. O sistema oferecerá relatórios, indicadores e recomendações automáticas, facilitando a tomada de decisão.
@@ -59,12 +59,12 @@ O projeto visa resolver dificuldades enfrentadas por lojistas na organização d
 
 ## Problemas a Resolver
 - Falta de automação na montagem de kits  
-- Ausência de ferramentas que interpretem tendências do mercado  
+- Ausência de ferramentas que intCRMretem tendências do mercado  
 - Gestão de produtos desorganizada  
 - Baixa eficiência nas análises visuais e gerenciais  
 
 ## Diferenciação / Ineditismo
-- ERP completamente focado no nicho de semi joias  
+- CRM completamente focado no nicho de semi joias  
 - Módulo de recomendação baseado em tendências  
 - Composição automática de kits comerciais  
 - Abordagem orientada a dados e otimização de vendas  
@@ -125,7 +125,7 @@ O projeto não contemplará:
 
 ### Visão Inicial da Arquitetura
 - Interface desenvolvida com Next.js  
-- API ERP construída com Node.js/Express  
+- API CRM construída com Node.js/Express  
 - Banco de dados MySQL  
 - Módulo de recomendação integrado à API  
 
@@ -137,7 +137,7 @@ O projeto não contemplará:
 ### Modelos C4
 ## C4 – Nível 1: Diagrama de Contexto
 
-O sistema ERP para Semi Joias é uma aplicação web que permite:
+O sistema CRM para Semi Joias é uma aplicação web que permite:
 
 - Gerenciar produtos
 - Criar kits automaticamente com base em tendências
@@ -149,7 +149,7 @@ O sistema ERP para Semi Joias é uma aplicação web que permite:
   Interage através da interface web para gerenciar produtos e visualizar recomendações.
 
 ### Sistema Principal
-- **ERP para Semi Joias**  
+- **CRM para Semi Joias**  
   Sistema web responsável por gerenciar dados, exibir dashboards e processar recomendações.
 
 ### Sistemas Externos
@@ -157,10 +157,10 @@ O sistema ERP para Semi Joias é uma aplicação web que permite:
   Fonte de dados usada para identificar produtos e categorias mais buscadas.
 
 ### Relações
-- O usuário acessa o ERP via navegador.
-- O ERP consulta a API de Tendências.
-- O ERP processa dados e monta kits.
-- O ERP salva e recupera dados do Banco MySQL.
+- O usuário acessa o CRM via navegador.
+- O CRM consulta a API de Tendências.
+- O CRM processa dados e monta kits.
+- O CRM salva e recupera dados do Banco MySQL.
   
 ## C4 – Nível 2: Diagrama de Containers
 
@@ -171,7 +171,7 @@ O sistema ERP para Semi Joias é uma aplicação web que permite:
    - Renderiza views e dashboards.
    - Envia requisições para a API via HTTP/HTTPS.
 
-2. **API ERP (Node.js / Express)**
+2. **API CRM (Node.js / Express)**
    - Contém toda a lógica de negócio.
    - Realiza CRUD de produtos.
    - Processa dados da API externa.
@@ -184,7 +184,7 @@ O sistema ERP para Semi Joias é uma aplicação web que permite:
 4. **API Externa de Tendências**
    - Fornece dados sobre tendências de mercado.
   
-## C4 – Nível 3: Componentes do Container "API ERP"
+## C4 – Nível 3: Componentes do Container "API CRM"
 
  1. AuthController
 - Login, logout, renovação de token JWT.
@@ -325,7 +325,7 @@ Embora o projeto utilize tendências de mercado, não faz uso de dados sensívei
 - Choi, H.; Varian, H. (2012). *Predicting the Present with Google Trends*. Economic Record.  
 - Hu, Y.; Koren, Y.; Volinsky, C. (2008). *Collaborative Filtering for Implicit Feedback Datasets*. IEEE International Conference on Data Mining.  
 - Jun, S.; Cho, S.; Park, H. (2018). *Analysis of the Relationship Between Google Trends and Fashion Market Trends*. Journal of Fashion Business.  
-- Silva, M. J.; Santos, T. (2021). *A utilização de sistemas ERP como ferramenta de apoio para micro e pequenas empresas*. Revista Gestão & Tecnologia.
+- Silva, M. J.; Santos, T. (2021). *A utilização de sistemas CRM como ferramenta de apoio para micro e pequenas empresas*. Revista Gestão & Tecnologia.
 
 **Livros e Arquitetura**
 - Brown, Simon. *The C4 Model for Visualising Software Architecture*. c4model.com.  
@@ -344,7 +344,7 @@ Embora o projeto utilize tendências de mercado, não faz uso de dados sensívei
 - MySQL Documentation – https://dev.mysql.com/doc/  
 
 **Produtos de Mercado (Soluções Correlatas)**
-- Bling ERP – https://www.bling.com.br  
-- Tiny ERP – https://www.tiny.com.br  
-- Omie ERP – https://www.omie.com.br  
+- Bling CRM – https://www.bling.com.br  
+- Tiny CRM – https://www.tiny.com.br  
+- Omie CRM – https://www.omie.com.br  
 
