@@ -2,9 +2,9 @@ import bcrypt from "bcryptjs";
 import "dotenv/config";
 import prisma from "./src/database/prismaClient.js";
 
-const email = process.env.TEST_USER_EMAIL || "teste@localhost";
-const password = process.env.TEST_USER_PASSWORD || "Test@12345";
-const name = process.env.TEST_USER_NAME || "Usuário Teste";
+const email = process.env.TEST_USER_EMAIL || "demo@demo";
+const password = process.env.TEST_USER_PASSWORD || "demo";
+const name = process.env.TEST_USER_NAME || "Usuário Demo";
 
 try {
   const hashedPassword = await bcrypt.hash(password, 10);

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { apiUrl } from "@/lib/api";
 import Button from "../components/Button";
 import MainLayout from "../components/MainLayout";
 import Modal from "../components/Modal";
@@ -53,8 +54,6 @@ interface KitDetail extends Omit<KitSummary, "_count"> {
     lineTotal: string;
   }[];
 }
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 function parseDecimal(value: string | number | null | undefined): number {
   if (value === null || value === undefined || value === "") return 0;

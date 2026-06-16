@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { apiUrl } from "@/lib/api";
 import MainLayout from "../components/MainLayout";
 import RequireAuth from "../components/RequireAuth";
 
@@ -26,8 +27,6 @@ interface Product {
   category?: NamedItem | null;
   collection?: NamedItem | null;
 }
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 function resolveImageUrl(image: string | null | undefined) {
   if (!image) return null;

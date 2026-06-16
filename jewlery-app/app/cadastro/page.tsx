@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { apiUrl } from "@/lib/api";
 import Button from "../components/Button";
 import MainLayout from "../components/MainLayout";
 import Modal from "../components/Modal";
@@ -120,8 +121,6 @@ export default function CadastroItem() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
   function clearImageSelection() {
     if (imagePreview?.startsWith("blob:")) {

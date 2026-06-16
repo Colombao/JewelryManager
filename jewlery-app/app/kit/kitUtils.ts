@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/api";
+
 export interface NamedItem {
   id: number;
   name: string;
@@ -47,8 +49,6 @@ export interface CategoryGroup {
   totalQty: number;
   totalValue: number;
 }
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 export function resolveImageUrl(image: string | null | undefined) {
   if (!image) return null;

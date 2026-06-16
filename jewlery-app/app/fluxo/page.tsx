@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { apiUrl } from "@/lib/api";
 import { FiEdit2, FiTrash2 } from "react-icons/fi";
 import { IoIosArrowRoundBack, IoIosArrowRoundForward } from "react-icons/io";
 import { LuLayoutDashboard } from "react-icons/lu";
@@ -69,8 +70,6 @@ function moveInArray<T>(arr: T[], fromIndex: number, toIndex: number) {
 }
 
 export default function FluxoPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
   const [boards, setBoards] = useState<Array<{ id: number; name: string }>>([]);
   const [activeBoardId, setActiveBoardId] = useState<number | null>(null);
 

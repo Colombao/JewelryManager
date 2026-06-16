@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { apiUrl } from "@/lib/api";
 import MainLayout from "../components/MainLayout";
 import RequireAuth from "../components/RequireAuth";
 import {
@@ -64,8 +65,6 @@ export default function MontarKit() {
   const [extraItems, setExtraItems] = useState({ showcase: 0, ringHolder: 0, boxes: 0 });
   const [maxKitValue, setMaxKitValue] = useState(1600);
   const [categoryQty, setCategoryQty] = useState<Record<string, number>>({});
-
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
   useEffect(() => {
     async function loadData() {

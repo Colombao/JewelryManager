@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { apiUrl } from "@/lib/api";
 import Button from "../components/Button";
 import MainLayout from "../components/MainLayout";
 import Modal from "../components/Modal";
@@ -33,8 +34,6 @@ const API_PATHS: Record<TabId, string> = {
 };
 
 export default function ConfiguracoesPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
   const [activeTab, setActiveTab] = useState<TabId>("categories");
   const [categories, setCategories] = useState<NamedItem[]>([]);
   const [platings, setPlatings] = useState<NamedItem[]>([]);
