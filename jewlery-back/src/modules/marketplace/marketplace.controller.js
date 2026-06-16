@@ -1,6 +1,7 @@
 // 🏪 MARKETPLACE CONTROLLER - Endpoints de tendências dos marketplaces
 import {
   compareKeywordWithMarketplace,
+  getKitSuggestionsFromTrends,
   getMarketplaceTrends,
   getMarketplaceTrendsByCategory,
 } from "../../providers/marketplace.provider.js";
@@ -33,6 +34,17 @@ export async function getTrendsByCategory(req, res) {
       trends,
       total: trends.length,
     });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function getKitSuggestions(req, res) {
+  try {
+    const { limit = 8 } = req.query;
+    const suggestions = await getKitSuggestionsFromTrends(parseInt(limit, 10));
+    return res.json(suggestions);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: err.message });

@@ -2,6 +2,7 @@
 import { Router } from "express";
 import {
   compareKeyword,
+  getKitSuggestions,
   getTrendsByCategory,
   getTrendsInAlta,
 } from "./marketplace.controller.js";
@@ -16,5 +17,8 @@ router.get("/trends-categoria", getTrendsByCategory);
 
 // GET /marketplace/compare?keyword=semi%20joia - Compara keyword com dados de mercado
 router.get("/compare", compareKeyword);
+
+// GET /marketplace/kit-suggestions - Tendências cruzadas com estoque para montagem de kit
+router.get("/kit-suggestions", getKitSuggestions);
 
 export default router;

@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
         hostname: "http2.mlstatic.com",
       },
       {
+        protocol: "https",
+        hostname: "*.mlstatic.com",
+      },
+      {
         protocol: protocol.replace(":", "") as "http" | "https",
         hostname,
         ...(port ? { port } : {}),

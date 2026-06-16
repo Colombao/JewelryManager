@@ -266,7 +266,8 @@ export function productBelongsToCategory(
 export function buildKitAutomatically(
   products: Product[],
   rules: KitAutoRule[],
-  maxTotal: number
+  maxTotal: number,
+  priorityProductIds: number[] = []
 ): AutoKitResult {
   const warnings: string[] = [];
   const items: KitLineItem[] = [];
@@ -305,7 +306,12 @@ export function buildKitAutomatically(
     const inStock = allInCategory.filter((product) => product.quantity > 0);
     const candidates = (
       inStock.length >= rule.quantity ? inStock : allInCategory
-    ).sort((a, b) => getDisplayPrice(a) - getDisplayPrice(b));
+    ).sort((a, b) => {
+      const aPriority = priorityProductIds.includes(a.id) ? 0 : 1;
+      const bPriority = priorityProductIds.includes(b.id) ? 0 : 1;
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      return getDisplayPrice(a) - getDisplayPrice(b);
+    });
 
     let picked = 0;
 
@@ -336,6 +342,81 @@ export function buildKitAutomatically(
     warnings.push(
       "Nenhum produto coube no valor máximo. Tente aumentar o limite ou reduzir as quantidades."
     );
+  }
+
+  return { items, warnings, total: currentTotal };
+}
+
+export interface TrendKitPayload {
+  trendName: string;
+  categories: string[];
+  productIds: number[];
+  maxKitValue?: number;
+}
+
+const TREND_KIT_STORAGE_KEY = "empodere_trend_kit";
+
+export function saveTrendKitPayload(payload: TrendKitPayload) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(TREND_KIT_STORAGE_KEY, JSON.stringify(payload));
+}
+
+export function consumeTrendKitPayload(): TrendKitPayload | null {
+  if (typeof window === "undefined") return null;
+  const raw = sessionStorage.getItem(TREND_KIT_STORAGE_KEY);
+  if (!raw) return null;
+  sessionStorage.removeItem(TREND_KIT_STORAGE_KEY);
+  try {
+    return JSON.parse(raw) as TrendKitPayload;
+  } catch {
+    return null;
+  }
+}
+
+export function buildKitFromTrendPayload(
+  products: Product[],
+  payload: TrendKitPayload,
+  maxTotal: number
+): AutoKitResult {
+  const warnings: string[] = [];
+  const items: KitLineItem[] = [];
+  const usedProductIds = new Set<number>();
+  let currentTotal = 0;
+
+  const priorityIds = payload.productIds ?? [];
+  const selectedProducts = products.filter(
+    (product) =>
+      product.active &&
+      priorityIds.includes(product.id) &&
+      product.quantity > 0 &&
+      getDisplayPrice(product) > 0
+  );
+
+  for (const product of selectedProducts) {
+    const price = getDisplayPrice(product);
+    if (currentTotal + price > maxTotal) {
+      warnings.push(`${product.name}: não coube no valor máximo`);
+      continue;
+    }
+
+    items.push(createLineFromProduct(product));
+    usedProductIds.add(product.id);
+    currentTotal += price;
+  }
+
+  if (selectedProducts.length === 0 && payload.categories.length > 0) {
+    const rules = payload.categories.map((category) => ({
+      category,
+      quantity: 1,
+    }));
+
+    return buildKitAutomatically(products, rules, maxTotal, priorityIds);
+  }
+
+  if (items.length === 0) {
+    warnings.push("Nenhum produto em estoque corresponde a esta tendência.");
+  } else {
+    warnings.unshift(`Kit montado com base na tendência "${payload.trendName}".`);
   }
 
   return { items, warnings, total: currentTotal };

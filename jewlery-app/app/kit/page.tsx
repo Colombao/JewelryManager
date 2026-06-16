@@ -9,7 +9,9 @@ import MainLayout from "../components/MainLayout";
 import RequireAuth from "../components/RequireAuth";
 import {
   addDays,
+  buildKitFromTrendPayload,
   buildKitAutomatically,
+  consumeTrendKitPayload,
   createLineFromKitItem,
   createLineFromProduct,
   createManualLine,
@@ -79,7 +81,42 @@ export default function MontarKit() {
         const isEditing = Number.isFinite(editId) && editId > 0;
 
         const productsRes = await fetch(`${apiUrl}/products?active=true`);
-        if (productsRes.ok) setProducts(await productsRes.json());
+        if (productsRes.ok) {
+          const loadedProducts = await productsRes.json();
+          setProducts(loadedProducts);
+
+          const trendPayload = consumeTrendKitPayload();
+          if (trendPayload && !isEditing) {
+            const result = buildKitFromTrendPayload(
+              loadedProducts,
+              trendPayload,
+              trendPayload.maxKitValue ?? 1600
+            );
+
+            if (result.items.length > 0) {
+              setItems(result.items);
+              if (trendPayload.maxKitValue) {
+                setMaxKitValue(trendPayload.maxKitValue);
+              }
+
+              setCategoryQty((prev) => {
+                const next = { ...prev };
+                for (const category of trendPayload.categories) {
+                  next[category] = Math.max(next[category] ?? 0, 1);
+                }
+                return next;
+              });
+
+              toast.success(
+                `Kit sugerido pela tendência "${trendPayload.trendName}"`
+              );
+            }
+
+            for (const warning of result.warnings) {
+              toast(warning, { icon: "⚠️" });
+            }
+          }
+        }
 
         if (isEditing) {
           const kitRes = await fetch(`${apiUrl}/kits/${editId}`);
