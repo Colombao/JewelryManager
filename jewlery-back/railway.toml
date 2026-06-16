@@ -1,8 +1,11 @@
 # Railway — backend (jewlery-back)
-# Start: apenas node src/server.js (NÃO rode seed:auth no deploy)
+# Node 20+ obrigatório (cheerio/puppeteer/undici usam global File)
 
 [build]
 builder = "NIXPACKS"
+
+[build.env]
+NIXPACKS_NODE_VERSION = "20"
 
 [deploy]
 startCommand = "npm run start"
