@@ -2,7 +2,7 @@ import prisma from "../database/prismaClient.js";
 import {
   buildSearchPageUrl,
   fetchTopListingsForTerms,
-  isChromeAvailableForScraping,
+  isMarketplaceScrapingEnabled,
 } from "./marketplace.scraper.js";
 
 export const JEWELRY_TREND_KEYWORDS = [
@@ -223,7 +223,7 @@ export async function buildHybridTrends(limit = 10) {
   }
 
   const mlByTerm = new Map();
-  if (isChromeAvailableForScraping() && termsToFetch.length > 0) {
+  if (isMarketplaceScrapingEnabled() && termsToFetch.length > 0) {
     console.log(`🛒 Buscando ${termsToFetch.length} anúncios reais no Mercado Livre...`);
     const listings = await fetchTopListingsForTerms(
       termsToFetch.map((keyword) => keyword.term)

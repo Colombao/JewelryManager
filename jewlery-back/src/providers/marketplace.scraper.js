@@ -91,6 +91,12 @@ export function isChromeAvailableForScraping() {
   return Boolean(resolveChromeExecutable());
 }
 
+export function isMarketplaceScrapingEnabled() {
+  if (process.env.MARKETPLACE_SCRAPING_ENABLED === "false") return false;
+  if (process.env.DISABLE_MARKETPLACE_SCRAPING === "true") return false;
+  return isChromeAvailableForScraping();
+}
+
 function parsePrice(priceText) {
   if (!priceText) return 0;
   const cleaned = priceText.replace(/[^\d.,]/g, "");
@@ -221,13 +227,17 @@ export async function fetchTopListingsForTerms(terms) {
         });
 
         try {
-          await page.waitForSelector(".poly-card", { timeout: 15000 });
+          await page.waitForSelector(".poly-card", {
+            timeout: process.env.RAILWAY_ENVIRONMENT ? 8000 : 15000,
+          });
         } catch {
           console.warn(`  ⚠️ Nenhum anúncio encontrado para "${term}"`);
           continue;
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+        await new Promise((resolve) =>
+          setTimeout(resolve, process.env.RAILWAY_ENVIRONMENT ? 1000 : 2500)
+        );
 
         const listing = await extractTopListingFromPage(page);
         if (!listing) {

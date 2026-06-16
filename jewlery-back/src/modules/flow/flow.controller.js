@@ -1,5 +1,13 @@
 import prisma from "../../database/prismaClient.js";
 
+function parseSafeId(value, fieldName) {
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 2147483647) {
+    return { error: `${fieldName} inválido` };
+  }
+  return { value: parsed };
+}
+
 // Para manter compatível com seu middleware atual, exigimos token presente.
 function requireToken(req, res, next) {
   const auth = req.headers.authorization;
@@ -322,21 +330,55 @@ async function moveCard(req, res) {
     const { cardId } = req.params;
     const { stepId, order } = req.body;
 
-    if (!stepId || typeof order !== "number") {
-      return res.status(400).json({ error: "stepId and order required" });
+    const parsedCardId = parseSafeId(cardId, "cardId");
+    if (parsedCardId.error) {
+      return res.status(400).json({ error: parsedCardId.error });
+    }
+
+    const parsedStepId = parseSafeId(stepId, "stepId");
+    if (parsedStepId.error) {
+      return res.status(400).json({ error: parsedStepId.error });
+    }
+
+    if (typeof order !== "number" || !Number.isFinite(order) || order < 0) {
+      return res.status(400).json({ error: "order inválido" });
+    }
+
+    const card = await prisma.card.findUnique({
+      where: { id: parsedCardId.value },
+      select: { id: true, boardId: true },
+    });
+
+    if (!card) {
+      return res.status(404).json({ error: "card not found" });
+    }
+
+    const step = await prisma.step.findFirst({
+      where: {
+        id: parsedStepId.value,
+        boardId: card.boardId,
+      },
+      select: { id: true },
+    });
+
+    if (!step) {
+      return res.status(400).json({ error: "stepId não pertence a este board" });
     }
 
     const updated = await prisma.card.update({
-      where: { id: Number(cardId) },
+      where: { id: parsedCardId.value },
       data: {
-        stepId: Number(stepId),
-        order,
+        stepId: parsedStepId.value,
+        order: Math.min(Math.round(order), 2147483647),
       },
     });
 
     res.json(updated);
   } catch (err) {
     console.error(err);
+    if (err.code === "P2020") {
+      return res.status(400).json({ error: "stepId ou order fora do intervalo permitido" });
+    }
     res.status(500).json({ error: "internal error" });
   }
 }

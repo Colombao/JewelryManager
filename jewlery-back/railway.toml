@@ -1,10 +1,10 @@
-# Railway — serviço do backend (jewlery-back)
-# Monte um Volume no painel em /data e defina UPLOAD_ROOT=/data
+# Railway — backend (jewlery-back)
+# Start: apenas node src/server.js (NÃO rode seed:auth no deploy)
 
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "node src/server.js"
+startCommand = "npm run start"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
