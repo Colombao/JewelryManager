@@ -308,9 +308,9 @@ export default function BusinessKitPanel({
       {onFinalize && mode === "admin" ? (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-slate-200">
           <p className="text-xs text-slate-500 max-w-xl">
-            {mode === "reseller"
-              ? "Ao finalizar, peças vendidas ou perdidas saem do estoque. Peças não marcadas voltam ao estoque da empresa."
-              : "Somente a empresa pode finalizar. Peças vendidas/perdidas saem do estoque; o restante volta ao estoque e gera o acerto com a revendedora."}
+            Somente a empresa pode finalizar. Peças vendidas/perdidas saem do
+            estoque; o restante volta ao estoque e gera o acerto com a
+            revendedora.
           </p>
           <button
             type="button"
