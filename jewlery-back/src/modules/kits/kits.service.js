@@ -1,4 +1,8 @@
 import prisma from "../../database/prismaClient.js";
+import {
+  buildCardDescriptionFromKit,
+  ensureKitUnits,
+} from "../flow/flow.utils.js";
 
 function toNumber(value, fallback = 0) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -64,6 +68,76 @@ function prepareKitItems(items) {
       sortOrder: index,
     };
   });
+}
+
+function aggregateProductQuantities(items) {
+  const map = new Map();
+
+  for (const item of items) {
+    if (!item.productId) continue;
+    const productId = toInt(item.productId);
+    if (productId <= 0) continue;
+    map.set(productId, (map.get(productId) ?? 0) + Math.max(1, toInt(item.quantity, 1)));
+  }
+
+  return map;
+}
+
+async function validateStockAvailability(tx, requiredByProductId) {
+  if (requiredByProductId.size === 0) return;
+
+  const productIds = [...requiredByProductId.keys()];
+  const products = await tx.product.findMany({
+    where: { id: { in: productIds } },
+    select: {
+      id: true,
+      quantity: true,
+      code: true,
+      reference: true,
+      name: true,
+    },
+  });
+
+  const byId = new Map(products.map((product) => [product.id, product]));
+  const errors = [];
+
+  for (const [productId, needed] of requiredByProductId) {
+    const product = byId.get(productId);
+    if (!product) {
+      errors.push(`Produto #${productId} não encontrado`);
+      continue;
+    }
+
+    if (product.quantity < needed) {
+      const ref = product.code || product.reference || product.name;
+      errors.push(
+        `${ref}: solicitado ${needed}, disponível ${product.quantity}`
+      );
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Estoque insuficiente: ${errors.join("; ")}`);
+  }
+}
+
+async function applyStockDeduction(tx, requiredByProductId) {
+  for (const [productId, qty] of requiredByProductId) {
+    await tx.product.update({
+      where: { id: productId },
+      data: { quantity: { decrement: qty } },
+    });
+  }
+}
+
+async function restoreStockFromItems(tx, items) {
+  const requiredByProductId = aggregateProductQuantities(items);
+  for (const [productId, qty] of requiredByProductId) {
+    await tx.product.update({
+      where: { id: productId },
+      data: { quantity: { increment: qty } },
+    });
+  }
 }
 
 function buildKitData(payload) {
@@ -195,19 +269,27 @@ export const kitsService = {
     }
 
     const preparedItems = prepareKitItems(items);
-
+    const requiredStock = aggregateProductQuantities(preparedItems);
     const kitData = buildKitData(payload);
 
-    const created = await prisma.kit.create({
-      data: {
-        kitNumber: nextNumber,
-        status: "montado",
-        ...kitData,
-        items: {
-          create: preparedItems,
+    const created = await prisma.$transaction(async (tx) => {
+      await validateStockAvailability(tx, requiredStock);
+
+      const kit = await tx.kit.create({
+        data: {
+          kitNumber: nextNumber,
+          status: "montado",
+          ...kitData,
+          items: {
+            create: preparedItems,
+          },
         },
-      },
-      include: kitInclude(),
+        include: kitInclude(),
+      });
+
+      await applyStockDeduction(tx, requiredStock);
+
+      return kit;
     });
 
     return created;
@@ -226,7 +308,13 @@ export const kitsService = {
       totals = {},
     } = payload;
 
-    const existing = await prisma.kit.findUnique({ where: { id } });
+    const existing = await prisma.kit.findUnique({
+      where: { id },
+      include: {
+        items: true,
+        card: { select: { id: true } },
+      },
+    });
     if (!existing) {
       throw new Error("Kit não encontrado");
     }
@@ -242,11 +330,15 @@ export const kitsService = {
     }
 
     const preparedItems = prepareKitItems(items);
+    const requiredStock = aggregateProductQuantities(preparedItems);
 
     return prisma.$transaction(async (tx) => {
+      await restoreStockFromItems(tx, existing.items);
+      await validateStockAvailability(tx, requiredStock);
+
       await tx.kitItem.deleteMany({ where: { kitId: id } });
 
-      return tx.kit.update({
+      const updated = await tx.kit.update({
         where: { id },
         data: {
           nature: kitData.nature,
@@ -273,16 +365,48 @@ export const kitsService = {
         },
         include: kitInclude(),
       });
+
+      await applyStockDeduction(tx, requiredStock);
+
+      if (existing.card) {
+        await tx.card.update({
+          where: { id: existing.card.id },
+          data: {
+            description: buildCardDescriptionFromKit(updated),
+          },
+        });
+        await ensureKitUnits(tx, id);
+      }
+
+      return updated;
     });
   },
 
   async remove(id) {
-    const existing = await prisma.kit.findUnique({ where: { id } });
+    const existing = await prisma.kit.findUnique({
+      where: { id },
+      include: {
+        items: true,
+        card: { select: { id: true } },
+      },
+    });
     if (!existing) {
       throw new Error("Kit não encontrado");
     }
 
-    await prisma.kit.delete({ where: { id } });
+    if (existing.card) {
+      throw new Error("Não é possível excluir kit vinculado ao fluxo");
+    }
+
+    if (existing.status !== "montado") {
+      throw new Error("Somente kits montados podem ser excluídos");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await restoreStockFromItems(tx, existing.items);
+      await tx.kit.delete({ where: { id } });
+    });
+
     return { message: "Kit removido com sucesso" };
   },
 };

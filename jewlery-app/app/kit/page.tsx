@@ -11,6 +11,7 @@ import {
   addDays,
   buildKitFromTrendPayload,
   buildKitAutomatically,
+  buildOriginalKitProductQty,
   consumeTrendKitPayload,
   createLineFromKitItem,
   createLineFromProduct,
@@ -18,8 +19,11 @@ import {
   formatBRL,
   formatDateInput,
   getAvailableCategories,
+  getAvailableProductQuantity,
   getCommissionLabel,
   getCommissionRate,
+  getMaxQuantityForItem,
+  getProductReference,
   groupItemsByCategory,
   lineTotal,
   fetchNextKitNumber,
@@ -28,6 +32,7 @@ import {
   KitLineItem,
   productMatchesSearch,
   resolveImageUrl,
+  validateKitStockItems,
 } from "./kitUtils";
 import { CommissionTier } from "@/lib/pricing";
 
@@ -62,6 +67,9 @@ export default function MontarKit() {
   );
 
   const [items, setItems] = useState<KitLineItem[]>([]);
+  const [originalKitProductQty, setOriginalKitProductQty] = useState<
+    Record<number, number>
+  >({});
   const [search, setSearch] = useState("");
   const [showCatalog, setShowCatalog] = useState(false);
   const [paymentType, setPaymentType] = useState<PaymentId>("avista");
@@ -157,7 +165,9 @@ export default function MontarKit() {
               createLineFromKitItem(item)
             )
           );
+          setOriginalKitProductQty(buildOriginalKitProductQty(kit.items ?? []));
         } else {
+          setOriginalKitProductQty({});
           const kitNumberRes = await fetch(`${apiUrl}/kits/next-number`);
           if (kitNumberRes.ok) {
             const data = await kitNumberRes.json();
@@ -259,7 +269,10 @@ export default function MontarKit() {
     const result = buildKitAutomatically(
       products,
       autoRulesPreview,
-      maxKitValue
+      maxKitValue,
+      [],
+      items,
+      originalKitProductQty
     );
 
     if (result.items.length === 0) {
@@ -293,6 +306,18 @@ export default function MontarKit() {
   }
 
   function addProduct(product: Product) {
+    const available = getAvailableProductQuantity(
+      product,
+      items,
+      originalKitProductQty
+    );
+    if (available <= 0) {
+      toast.error(
+        `Sem estoque para ${getProductReference(product)}`
+      );
+      return;
+    }
+
     setItems((prev) => [...prev, createLineFromProduct(product)]);
     toast.success(`${product.name} adicionado ao kit`);
     setSearch("");
@@ -343,7 +368,39 @@ export default function MontarKit() {
 
   function updateItem(id: string, patch: Partial<KitLineItem>) {
     setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
+      prev.map((item) => {
+        if (item.id !== id) return item;
+
+        const next = { ...item, ...patch };
+
+        if (patch.quantity !== undefined && next.productId) {
+          const product = products.find((entry) => entry.id === next.productId);
+          if (product) {
+            const maxQty = getMaxQuantityForItem(
+              product,
+              prev,
+              id,
+              originalKitProductQty
+            );
+
+            if (maxQty <= 0) {
+              toast.error(
+                `Sem estoque para ${getProductReference(product)}`
+              );
+              return item;
+            }
+
+            if (next.quantity > maxQty) {
+              toast.error(
+                `Estoque insuficiente para ${getProductReference(product)} (máx. ${maxQty})`
+              );
+              return { ...item, quantity: maxQty };
+            }
+          }
+        }
+
+        return next;
+      })
     );
   }
 
@@ -358,9 +415,31 @@ export default function MontarKit() {
     }
   }
 
+  async function reloadProducts() {
+    const productsRes = await fetch(`${apiUrl}/products?active=true`);
+    if (productsRes.ok) {
+      setProducts(await productsRes.json());
+    }
+  }
+
   async function handleSave() {
     if (items.length === 0) {
       toast.error("Adicione pelo menos um produto ao kit");
+      return;
+    }
+
+    const stockErrors = validateKitStockItems(
+      items,
+      products,
+      originalKitProductQty
+    );
+    if (stockErrors.length > 0) {
+      toast.error(stockErrors[0]);
+      if (stockErrors.length > 1) {
+        for (const message of stockErrors.slice(1)) {
+          toast(message, { icon: "⚠️" });
+        }
+      }
       return;
     }
 
@@ -414,6 +493,8 @@ export default function MontarKit() {
           : `Kit ${data.kitNumber} salvo com sucesso!`
       );
 
+      await reloadProducts();
+
       if (editingKitId) {
         router.push("/kits");
         return;
@@ -422,6 +503,7 @@ export default function MontarKit() {
       const nextNumber = await fetchNextKitNumber(apiUrl);
       setKitNumber(nextNumber);
       setItems([]);
+      setOriginalKitProductQty({});
       setExtraItems({ showcase: 0, ringHolder: 0, boxes: 0 });
       setIssueDate(formatDateInput(new Date()));
       setReturnDate(formatDateInput(addDays(new Date(), 28)));
@@ -609,12 +691,23 @@ export default function MontarKit() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-64 overflow-y-auto">
                       {filteredProducts.map((product) => {
                         const imageUrl = resolveImageUrl(product.image);
+                        const available = getAvailableProductQuantity(
+                          product,
+                          items,
+                          originalKitProductQty
+                        );
+                        const outOfStock = available <= 0;
                         return (
                           <button
                             key={product.id}
                             type="button"
+                            disabled={outOfStock}
                             onClick={() => addProduct(product)}
-                            className="text-left p-2 border border-[#eee] rounded-sm hover:border-[#b8860b] hover:shadow-sm bg-white transition"
+                            className={`text-left p-2 border rounded-sm bg-white transition ${
+                              outOfStock
+                                ? "border-[#eee] opacity-50 cursor-not-allowed"
+                                : "border-[#eee] hover:border-[#b8860b] hover:shadow-sm"
+                            }`}
                           >
                             <div className="aspect-square mb-2 bg-[#f5f5f5] flex items-center justify-center overflow-hidden rounded-sm">
                               {imageUrl ? (
@@ -633,6 +726,13 @@ export default function MontarKit() {
                             </p>
                             <p className="text-xs text-[#333] line-clamp-2 leading-tight">
                               {product.name}
+                            </p>
+                            <p
+                              className={`text-[10px] mt-1 ${
+                                outOfStock ? "text-red-600" : "text-[#666]"
+                              }`}
+                            >
+                              Estoque: {available}
                             </p>
                           </button>
                         );
@@ -680,7 +780,20 @@ export default function MontarKit() {
                       ) : (
                         groups.map((group) => (
                           <Fragment key={group.category}>
-                            {group.items.map((item) => (
+                            {group.items.map((item) => {
+                              const linkedProduct = item.productId
+                                ? products.find((entry) => entry.id === item.productId)
+                                : null;
+                              const maxQty = linkedProduct
+                                ? getMaxQuantityForItem(
+                                    linkedProduct,
+                                    items,
+                                    item.id,
+                                    originalKitProductQty
+                                  )
+                                : undefined;
+
+                              return (
                               <tr
                                 key={item.id}
                                 className="border-b border-[#f0f0f0] hover:bg-[#fafafa]"
@@ -692,20 +805,36 @@ export default function MontarKit() {
                                   {item.description}
                                 </td>
                                 <td className="py-2 px-2 text-center">
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    value={item.quantity}
-                                    onChange={(e) =>
-                                      updateItem(item.id, {
-                                        quantity: Math.max(
-                                          1,
-                                          parseInt(e.target.value, 10) || 1
-                                        ),
-                                      })
-                                    }
-                                    className="w-14 px-1 py-1 text-center border border-[#ddd] rounded-sm text-sm"
-                                  />
+                                  <div className="inline-flex items-center justify-center gap-0.5">
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={maxQty}
+                                      value={item.quantity}
+                                      title={
+                                        linkedProduct
+                                          ? `Estoque disponível: ${maxQty}`
+                                          : undefined
+                                      }
+                                      onChange={(e) =>
+                                        updateItem(item.id, {
+                                          quantity: Math.max(
+                                            1,
+                                            parseInt(e.target.value, 10) || 1
+                                          ),
+                                        })
+                                      }
+                                      className="w-14 px-1 py-1 text-center border border-[#ddd] rounded-sm text-sm"
+                                    />
+                                    {linkedProduct ? (
+                                      <span
+                                        className="text-[10px] text-[#bbb] tabular-nums select-none"
+                                        title={`Estoque disponível: ${maxQty}`}
+                                      >
+                                        /{maxQty}
+                                      </span>
+                                    ) : null}
+                                  </div>
                                 </td>
                                 <td className="py-2 px-2 text-right">
                                   <input
@@ -738,7 +867,8 @@ export default function MontarKit() {
                                   </button>
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                             <tr className="bg-[#f7f7f7] font-semibold text-[#444]">
                               <td colSpan={2} className="py-2 pr-3 italic">
                                 Total — {group.category}

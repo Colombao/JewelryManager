@@ -3,7 +3,10 @@ import {
   getBusinessDetailByCardId,
   updateBusinessUnitByCardId,
 } from "./flow.business.service.js";
-import { ensureKitUnits } from "./flow.utils.js";
+import {
+  buildCardDescriptionFromKit,
+  ensureKitUnits,
+} from "./flow.utils.js";
 
 function parseSafeId(value, fieldName) {
   const parsed = Number.parseInt(String(value), 10);
@@ -272,10 +275,7 @@ async function createBusiness(req, res) {
       .filter(Boolean)
       .join(" - ");
 
-    const description = `${kit.totalQty} peças · Total ${Number(kit.grandTotal).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    })}`;
+    const description = buildCardDescriptionFromKit(kit);
 
     const result = await prisma.$transaction(async (tx) => {
       await tx.kit.update({

@@ -70,6 +70,10 @@ function formatDate(value: string) {
   return date.toLocaleDateString("pt-BR");
 }
 
+function canDeleteKit(kit: Pick<KitSummary, "card" | "status">) {
+  return !kit.card && kit.status === "montado";
+}
+
 function getStatusLabel(kit: Pick<KitSummary, "card" | "status">) {
   if (kit.card) return "No fluxo";
   if (kit.status === "montado") return "Montado";
@@ -121,18 +125,23 @@ export default function KitsMontados() {
     }
   }
 
-  async function handleDelete(id: number, kitNumber: number) {
-    const ok = confirm(`Excluir o kit nº ${kitNumber}? Esta ação não pode ser desfeita.`);
+  async function handleDelete(kit: Pick<KitSummary, "id" | "kitNumber" | "card" | "status">) {
+    if (!canDeleteKit(kit)) {
+      toast.error("Kits no fluxo não podem ser excluídos");
+      return;
+    }
+
+    const ok = confirm(`Excluir o kit nº ${kit.kitNumber}? Esta ação não pode ser desfeita.`);
     if (!ok) return;
 
     try {
-      const res = await fetch(`${apiUrl}/kits/${id}`, { method: "DELETE" });
+      const res = await fetch(`${apiUrl}/kits/${kit.id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Erro ao excluir kit");
 
-      toast.success(`Kit ${kitNumber} excluído`);
-      setKits((prev) => prev.filter((kit) => kit.id !== id));
-      if (selectedKit?.id === id) {
+      toast.success(`Kit ${kit.kitNumber} excluído`);
+      setKits((prev) => prev.filter((entry) => entry.id !== kit.id));
+      if (selectedKit?.id === kit.id) {
         setShowDetail(false);
         setSelectedKit(null);
       }
@@ -182,7 +191,13 @@ export default function KitsMontados() {
         headerClassName: "sticky left-0 z-20 bg-slate-800 w-[120px]",
         cellClassName: "sticky left-0 z-10 bg-white",
         render: (kit) => (
-          <TableActions onDelete={() => handleDelete(kit.id, kit.kitNumber)}>
+          <TableActions
+            onDelete={
+              canDeleteKit(kit)
+                ? () => handleDelete(kit)
+                : undefined
+            }
+          >
             <button
               type="button"
               onClick={() => openKitDetail(kit.id)}
@@ -282,14 +297,16 @@ export default function KitsMontados() {
         >
           <FiEdit2 size={18} />
         </Link>
-        <button
-          type="button"
-          onClick={() => handleDelete(kit.id, kit.kitNumber)}
-          className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition"
-          aria-label="Excluir"
-        >
-          <FiTrash2 size={18} />
-        </button>
+        {canDeleteKit(kit) ? (
+          <button
+            type="button"
+            onClick={() => handleDelete(kit)}
+            className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition"
+            aria-label="Excluir"
+          >
+            <FiTrash2 size={18} />
+          </button>
+        ) : null}
         <span className="ml-auto font-bold text-[#b8860b]">#{kit.kitNumber}</span>
       </div>
       <div className="p-4 space-y-2">
@@ -505,15 +522,15 @@ export default function KitsMontados() {
                   >
                     Editar kit
                   </Link>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    onClick={() =>
-                      handleDelete(selectedKit.id, selectedKit.kitNumber)
-                    }
-                  >
-                    Excluir kit
-                  </Button>
+                  {canDeleteKit(selectedKit) ? (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      onClick={() => handleDelete(selectedKit)}
+                    >
+                      Excluir kit
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             )}

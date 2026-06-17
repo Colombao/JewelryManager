@@ -57,7 +57,8 @@ export async function createKit(req, res) {
       err.message.includes("obrigatório") ||
       err.message.includes("Adicione") ||
       err.message.includes("inválido") ||
-      err.message.includes("Datas")
+      err.message.includes("Datas") ||
+      err.message.includes("Estoque insuficiente")
     ) {
       return res.status(400).json({ error: err.message });
     }
@@ -85,7 +86,8 @@ export async function updateKit(req, res) {
     if (
       err.message.includes("obrigatório") ||
       err.message.includes("Adicione") ||
-      err.message.includes("Datas")
+      err.message.includes("Datas") ||
+      err.message.includes("Estoque insuficiente")
     ) {
       return res.status(400).json({ error: err.message });
     }
@@ -104,6 +106,13 @@ export async function deleteKit(req, res) {
 
     if (err.message.includes("não encontrado")) {
       return res.status(404).json({ error: err.message });
+    }
+
+    if (
+      err.message.includes("fluxo") ||
+      err.message.includes("montados podem ser excluídos")
+    ) {
+      return res.status(400).json({ error: err.message });
     }
 
     return res.status(500).json({ error: err.message });

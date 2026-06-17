@@ -85,9 +85,11 @@ export default function FluxoPage() {
 
   const [createBoardOpen, setCreateBoardOpen] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
+  const [creatingBoard, setCreatingBoard] = useState(false);
 
   const [createStepOpen, setCreateStepOpen] = useState(false);
   const [newStepName, setNewStepName] = useState("");
+  const [creatingStep, setCreatingStep] = useState(false);
 
   const [openModalEditStep, setOpenModalEditStep] = useState(false);
   const [editingStep, setEditingStep] = useState<Step | null>(null);
@@ -383,6 +385,11 @@ export default function FluxoPage() {
   const handleDragEnd = () => {
     setDraggingCardId(null);
     setDragOverStepId(null);
+    // O browser dispara click logo após dragend; o timeout deixa bloquear esse clique
+    // e depois libera cliques normais nos cards.
+    window.setTimeout(() => {
+      dragMovedRef.current = false;
+    }, 0);
   };
 
   const handleDropOnStep = async (stepId: number) => {
@@ -933,18 +940,21 @@ export default function FluxoPage() {
                     setCreateBoardOpen(false);
                     setNewBoardName("");
                   }}
-                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition text-slate-800 text-sm font-medium"
+                  disabled={creatingBoard}
+                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition text-slate-800 text-sm font-medium disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={async () => {
+                    if (creatingBoard) return;
                     const name = newBoardName.trim();
                     if (!name) {
                       toast.error("Informe um nome para o board");
                       return;
                     }
 
+                    setCreatingBoard(true);
                     try {
                       const res = await fetch(`${apiUrl}/flow/board`, {
                         method: "POST",
@@ -981,11 +991,14 @@ export default function FluxoPage() {
                       toast.error(
                         e instanceof Error ? e.message : "Erro ao criar board"
                       );
+                    } finally {
+                      setCreatingBoard(false);
                     }
                   }}
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition text-white text-sm font-medium"
+                  disabled={creatingBoard}
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Criar
+                  {creatingBoard ? "Criando..." : "Criar"}
                 </button>
               </div>
             </div>
@@ -1015,44 +1028,44 @@ export default function FluxoPage() {
                     setCreateStepOpen(false);
                     setNewStepName("");
                   }}
-                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition text-slate-800 text-sm font-medium"
+                  disabled={creatingStep}
+                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition text-slate-800 text-sm font-medium disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={async () => {
-                    if (!board) return;
+                    if (!board || creatingStep) return;
                     const name = newStepName.trim();
                     if (!name) {
                       toast.error("Informe um nome para a etapa");
                       return;
                     }
 
+                    const order = board.steps.length;
+                    const tempId = Date.now();
+
+                    setCreatingStep(true);
+                    setBoard((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            steps: [
+                              ...prev.steps,
+                              {
+                                id: tempId,
+                                name,
+                                businessId: board.id,
+                                order,
+                              },
+                            ],
+                          }
+                        : prev
+                    );
+
                     try {
-                      const order = board.steps.length;
-
-                      // otimista: inclui a nova etapa no board atual para já aparecer na UI
-                      const tempId = Date.now();
-                      setBoard((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              steps: [
-                                ...prev.steps,
-                                {
-                                  id: tempId,
-                                  name,
-                                  businessId: board.id,
-                                  order,
-                                },
-                              ],
-                            }
-                          : prev
-                      );
-
                       const res = await fetch(`${apiUrl}/flow/steps`, {
                         method: "POST",
-
                         headers: {
                           "Content-Type": "application/json",
                           Authorization: `Bearer ${
@@ -1071,18 +1084,46 @@ export default function FluxoPage() {
                         throw new Error(err.error ?? "Erro ao criar etapa");
                       }
 
+                      const created = await res.json();
+                      const newStep: Step = {
+                        id: created.id,
+                        name: created.name,
+                        businessId: created.boardId,
+                        order: created.order,
+                      };
+
+                      setBoard((prev) => {
+                        if (!prev) return prev;
+                        return {
+                          ...prev,
+                          steps: prev.steps.map((s) =>
+                            s.id === tempId ? newStep : s
+                          ),
+                        };
+                      });
+
                       toast.success("Etapa criada");
                       setCreateStepOpen(false);
                       setNewStepName("");
                     } catch (e) {
+                      setBoard((prev) => {
+                        if (!prev) return prev;
+                        return {
+                          ...prev,
+                          steps: prev.steps.filter((s) => s.id !== tempId),
+                        };
+                      });
                       toast.error(
                         e instanceof Error ? e.message : "Erro ao criar etapa"
                       );
+                    } finally {
+                      setCreatingStep(false);
                     }
                   }}
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition text-white text-sm font-medium"
+                  disabled={creatingStep}
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Criar
+                  {creatingStep ? "Criando..." : "Criar"}
                 </button>
               </div>
             </div>

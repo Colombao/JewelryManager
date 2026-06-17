@@ -141,6 +141,77 @@ export function getCommissionLabel(
   return resolveLabel(total, tiers);
 }
 
+export function getProductStockUsage(
+  items: KitLineItem[],
+  productId: number,
+  excludeItemId?: string
+): number {
+  return items
+    .filter((item) => item.productId === productId && item.id !== excludeItemId)
+    .reduce((sum, item) => sum + item.quantity, 0);
+}
+
+export function buildOriginalKitProductQty(
+  kitItems: Array<{ productId?: number | null; quantity: number }>
+): Record<number, number> {
+  const map: Record<number, number> = {};
+  for (const item of kitItems) {
+    if (!item.productId) continue;
+    map[item.productId] = (map[item.productId] ?? 0) + item.quantity;
+  }
+  return map;
+}
+
+export function getAvailableProductQuantity(
+  product: Product,
+  items: KitLineItem[],
+  originallyReserved: Record<number, number> = {},
+  excludeItemId?: string
+): number {
+  const reserved = originallyReserved[product.id] ?? 0;
+  const usedInKit = getProductStockUsage(items, product.id, excludeItemId);
+  return Math.max(0, product.quantity + reserved - usedInKit);
+}
+
+export function getMaxQuantityForItem(
+  product: Product,
+  items: KitLineItem[],
+  itemId: string,
+  originallyReserved: Record<number, number> = {}
+): number {
+  return getAvailableProductQuantity(product, items, originallyReserved, itemId);
+}
+
+export function validateKitStockItems(
+  items: KitLineItem[],
+  products: Product[],
+  originallyReserved: Record<number, number> = {}
+): string[] {
+  const neededByProduct = new Map<number, number>();
+
+  for (const item of items) {
+    if (!item.productId) continue;
+    neededByProduct.set(
+      item.productId,
+      (neededByProduct.get(item.productId) ?? 0) + item.quantity
+    );
+  }
+
+  const errors: string[] = [];
+
+  for (const [productId, needed] of neededByProduct) {
+    const product = products.find((entry) => entry.id === productId);
+    const available = (product?.quantity ?? 0) + (originallyReserved[productId] ?? 0);
+    const ref = product ? getProductReference(product) : `#${productId}`;
+
+    if (needed > available) {
+      errors.push(`${ref}: solicitado ${needed}, disponível ${available}`);
+    }
+  }
+
+  return errors;
+}
+
 export function createLineFromProduct(product: Product): KitLineItem {
   const reference = getProductReference(product);
   const category = getProductCategory(product);
@@ -272,7 +343,9 @@ export function buildKitAutomatically(
   products: Product[],
   rules: KitAutoRule[],
   maxTotal: number,
-  priorityProductIds: number[] = []
+  priorityProductIds: number[] = [],
+  existingItems: KitLineItem[] = [],
+  originallyReserved: Record<number, number> = {}
 ): AutoKitResult {
   const warnings: string[] = [];
   const items: KitLineItem[] = [];
@@ -322,6 +395,13 @@ export function buildKitAutomatically(
 
     for (const product of candidates) {
       if (picked >= rule.quantity) break;
+
+      const available = getAvailableProductQuantity(
+        product,
+        [...existingItems, ...items],
+        originallyReserved
+      );
+      if (available <= 0) continue;
 
       const price = getDisplayPrice(product);
       if (currentTotal + price > maxTotal) continue;

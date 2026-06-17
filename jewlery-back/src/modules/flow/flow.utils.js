@@ -60,4 +60,14 @@ function flattenKitUnits(items) {
   return units;
 }
 
-export { ensureKitUnits, flattenKitUnits };
+function buildCardDescriptionFromKit(kit) {
+  const totalQty = kit.totalQty ?? 0;
+  const grandTotal = Number(kit.grandTotal ?? 0);
+
+  return `${totalQty} peças · Total ${grandTotal.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  })}`;
+}
+
+export { buildCardDescriptionFromKit, ensureKitUnits, flattenKitUnits };
