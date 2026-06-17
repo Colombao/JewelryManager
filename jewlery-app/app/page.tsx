@@ -24,7 +24,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!isLoading && token) {
-      router.replace(user?.role === "reseller" ? "/revendedora" : "/fluxo");
+      router.replace(user?.role === "reseller" ? "/revendedora" : "/dashboard");
     }
   }, [isLoading, token, user?.role, router]);
 
@@ -50,7 +50,7 @@ export default function Home() {
       }
 
       login(data.token, data.user);
-      router.replace("/fluxo");
+      router.replace("/dashboard");
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "Não foi possível entrar."

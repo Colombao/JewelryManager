@@ -18,6 +18,7 @@ import commissionTierRoutes from "./modules/commission-tier/commission-tier.rout
 import resellerPortalRoutes from "./modules/reseller-portal/reseller-portal.routes.js";
 import trendsRoutes from "./modules/trends/trends.routes.js";
 import uploadRoutes from "./modules/upload/upload.routes.js";
+import dashboardRoutes from "./modules/dashboard/dashboard.route.js";
 import { ensureUploadDirectories, uploadRoot } from "./config/uploads.js";
 import { getCorsOptions, isAllowedOrigin } from "./config/cors.js";
 
@@ -146,6 +147,7 @@ app.use("/commission-tiers", commissionTierRoutes);
 app.use("/reseller-portal", resellerPortalRoutes);
 app.use("/products", productsRoutes);
 app.use("/kits", kitsRoutes);
+app.use("/dashboard", dashboardRoutes);
 app.use("/upload", uploadRoutes);
 
 app.use((err, req, res, _next) => {

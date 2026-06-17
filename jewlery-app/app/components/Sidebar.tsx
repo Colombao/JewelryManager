@@ -4,6 +4,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FaClipboardList, FaPlus, FaToolbox, FaTrello } from "react-icons/fa";
+import { LuLayoutDashboard } from "react-icons/lu";
 import { GoGraph } from "react-icons/go";
 import { HiX } from "react-icons/hi";
 import { IoIosSettings, IoMdPeople } from "react-icons/io";
@@ -23,6 +24,7 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { icon: <LuLayoutDashboard />, label: "Dashboard", href: "/dashboard" },
   { icon: <FaTrello />, label: "Fluxo", href: "/fluxo" },
   { icon: <RiJewelryFill />, label: "Produtos", href: "/produtos" },
   { icon: <FaPlus />, label: "Cadastrar", href: "/cadastro" },
