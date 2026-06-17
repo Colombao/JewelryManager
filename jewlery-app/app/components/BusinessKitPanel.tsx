@@ -12,6 +12,8 @@ type BusinessKitPanelProps = {
     field: "owner" | "reseller" | "missing",
     value: boolean
   ) => void;
+  onFinalize?: () => void;
+  finalizing?: boolean;
 };
 
 function StatusButton({
@@ -49,6 +51,8 @@ export default function BusinessKitPanel({
   mode,
   updatingUnitId,
   onToggleUnit,
+  onFinalize,
+  finalizing = false,
 }: BusinessKitPanelProps) {
   const canEditOwner = mode === "admin";
   const canEditReseller = mode === "admin" || mode === "reseller";
@@ -300,6 +304,24 @@ export default function BusinessKitPanel({
           ? "Marque em azul as peças que você vendeu e em vermelho as perdidas ou em falta. A confirmação final depende também da empresa."
           : "Cada linha é uma peça individual. A comissão segue a tabela em Configurações → Comissão Revendedora."}
       </p>
+
+      {onFinalize && mode === "admin" ? (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-slate-200">
+          <p className="text-xs text-slate-500 max-w-xl">
+            {mode === "reseller"
+              ? "Ao finalizar, peças vendidas ou perdidas saem do estoque. Peças não marcadas voltam ao estoque da empresa."
+              : "Somente a empresa pode finalizar. Peças vendidas/perdidas saem do estoque; o restante volta ao estoque e gera o acerto com a revendedora."}
+          </p>
+          <button
+            type="button"
+            disabled={finalizing}
+            onClick={onFinalize}
+            className="shrink-0 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition disabled:opacity-50"
+          >
+            {finalizing ? "Finalizando..." : "Finalizar entrega"}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

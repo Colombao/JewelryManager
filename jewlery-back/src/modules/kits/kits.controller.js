@@ -1,4 +1,9 @@
 import { kitsService } from "./kits.service.js";
+import {
+  confirmSettlementByCompany,
+  confirmSettlementPayment,
+  getSettlementByKitId,
+} from "./kit-settlement.service.js";
 
 export async function getNextKitNumber(req, res) {
   try {
@@ -87,11 +92,66 @@ export async function updateKit(req, res) {
       err.message.includes("obrigatório") ||
       err.message.includes("Adicione") ||
       err.message.includes("Datas") ||
-      err.message.includes("Estoque insuficiente")
+      err.message.includes("Estoque insuficiente") ||
+      err.message.includes("finalizados não podem")
     ) {
       return res.status(400).json({ error: err.message });
     }
 
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function confirmKitSettlementPayment(req, res) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const paymentId = parseInt(req.params.paymentId, 10);
+
+    if (!Number.isFinite(paymentId) || paymentId <= 0) {
+      return res.status(400).json({ error: "paymentId inválido" });
+    }
+
+    const settlement = await confirmSettlementPayment(
+      id,
+      paymentId,
+      req.body?.note
+    );
+    return res.json({
+      message: "Parcela confirmada",
+      settlement,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+}
+
+export async function confirmKitSettlement(req, res) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const settlement = await confirmSettlementByCompany(id, req.body?.note);
+    return res.json({
+      message: "Pagamento confirmado",
+      settlement,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+}
+
+export async function getKitSettlement(req, res) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const settlement = await getSettlementByKitId(id);
+
+    if (!settlement) {
+      return res.status(404).json({ error: "Acerto não encontrado" });
+    }
+
+    return res.json(settlement);
+  } catch (err) {
+    console.error(err);
     return res.status(500).json({ error: err.message });
   }
 }

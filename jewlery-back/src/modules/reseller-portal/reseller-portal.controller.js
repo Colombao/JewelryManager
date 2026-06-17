@@ -6,6 +6,11 @@ import {
   listBusinessesForReseller,
   updateBusinessUnitByCardId,
 } from "../flow/flow.business.service.js";
+import {
+  listSettlementsForReseller,
+  markSettlementPaidByReseller,
+  registerSettlementPayment,
+} from "../kits/kit-settlement.service.js";
 
 function parseSafeId(value, fieldName) {
   const parsed = Number.parseInt(String(value), 10);
@@ -163,4 +168,75 @@ async function updateUnit(req, res) {
   }
 }
 
-export { getBusiness, listBusinesses, login, me, updateUnit };
+async function listSettlements(req, res) {
+  try {
+    const data = await listSettlementsForReseller(req.reseller.id);
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+}
+
+async function registerSettlementPaymentHandler(req, res) {
+  try {
+    const parsed = parseSafeId(req.params.kitId, "kitId");
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const { amount, note } = req.body;
+    const settlement = await registerSettlementPayment(
+      parsed.value,
+      req.reseller.id,
+      amount,
+      note
+    );
+
+    res.json({
+      message: "Pagamento informado. Aguardando confirmação da empresa.",
+      settlement,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({
+      error: err.message || "internal error",
+    });
+  }
+}
+
+async function markSettlementPaid(req, res) {
+  try {
+    const parsed = parseSafeId(req.params.kitId, "kitId");
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const settlement = await markSettlementPaidByReseller(
+      parsed.value,
+      req.reseller.id,
+      req.body?.note
+    );
+
+    res.json({
+      message: "Pagamento informado. Aguardando confirmação da empresa.",
+      settlement,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({
+      error: err.message || "internal error",
+    });
+  }
+}
+
+export {
+  getBusiness,
+  listBusinesses,
+  listSettlements,
+  login,
+  markSettlementPaid,
+  me,
+  registerSettlementPaymentHandler,
+  updateUnit,
+};

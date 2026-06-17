@@ -51,6 +51,7 @@ export type BusinessDetail = {
     totalQty: number;
     grandTotal: string | number;
     finalTotal: string | number;
+    status?: string;
   };
   units: BusinessUnit[];
   summary: BusinessSummary;

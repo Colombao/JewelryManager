@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { apiUrl } from "@/lib/api";
-import { FiEdit2, FiTrash2 } from "react-icons/fi";
+import { FiEdit2, FiMoreVertical, FiTrash2 } from "react-icons/fi";
 import { IoIosArrowRoundBack, IoIosArrowRoundForward } from "react-icons/io";
 import { LuLayoutDashboard } from "react-icons/lu";
 import Select from "react-select";
@@ -108,6 +108,11 @@ export default function FluxoPage() {
   );
   const [loadingBusinessDetail, setLoadingBusinessDetail] = useState(false);
   const [updatingUnitId, setUpdatingUnitId] = useState<number | null>(null);
+  const [finalizingBusiness, setFinalizingBusiness] = useState(false);
+  const [cardMenuOpenId, setCardMenuOpenId] = useState<number | null>(null);
+  const [transferCardTarget, setTransferCardTarget] = useState<Card | null>(null);
+  const [transferBoardId, setTransferBoardId] = useState("");
+  const [transferringCard, setTransferringCard] = useState(false);
   const dragMovedRef = useRef(false);
 
   const authHeader = useMemo(
@@ -282,6 +287,153 @@ export default function FluxoPage() {
     }
   }
 
+  async function handleCancelCard(card: Card) {
+    setCardMenuOpenId(null);
+
+    const result = await Swal.fire({
+      title: "Remover do fluxo?",
+      text: `O kit voltará para Kits Montados e ficará disponível novamente. Card: ${card.title}`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Sim, remover",
+      cancelButtonText: "Cancelar",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const res = await fetch(`${apiUrl}/flow/cards/${card.id}`, {
+        method: "DELETE",
+        headers: authHeader,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Erro ao remover card");
+      }
+
+      setBoard((prev) =>
+        prev
+          ? { ...prev, cards: prev.cards.filter((entry) => entry.id !== card.id) }
+          : prev
+      );
+      if (businessDetail?.id === card.id) {
+        setBusinessOpen(false);
+        setBusinessDetail(null);
+      }
+      toast.success(data?.message || "Card removido do fluxo");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao remover card");
+    }
+  }
+
+  function openTransferModal(card: Card) {
+    setCardMenuOpenId(null);
+    setTransferCardTarget(card);
+    setTransferBoardId("");
+  }
+
+  async function handleTransferCard() {
+    if (!transferCardTarget || !transferBoardId) {
+      toast.error("Selecione o board de destino");
+      return;
+    }
+
+    if (Number(transferBoardId) === board?.id) {
+      toast.error("Selecione um board diferente do atual");
+      return;
+    }
+
+    setTransferringCard(true);
+    try {
+      const res = await fetch(
+        `${apiUrl}/flow/cards/${transferCardTarget.id}/transfer`,
+        {
+          method: "POST",
+          headers: authHeader,
+          body: JSON.stringify({ boardId: Number(transferBoardId) }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Erro ao mover card");
+      }
+
+      setBoard((prev) =>
+        prev
+          ? {
+              ...prev,
+              cards: prev.cards.filter(
+                (entry) => entry.id !== transferCardTarget.id
+              ),
+            }
+          : prev
+      );
+      setTransferCardTarget(null);
+      setTransferBoardId("");
+      toast.success("Card movido para outro board");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao mover card");
+    } finally {
+      setTransferringCard(false);
+    }
+  }
+
+  async function handleFinalizeBusiness() {
+    if (!businessDetail) return;
+
+    const pending = businessDetail.summary.pending;
+    const result = await Swal.fire({
+      title: "Finalizar entrega?",
+      html:
+        pending > 0
+          ? `<p>Peças vendidas ou perdidas serão baixadas no estoque.</p><p><strong>${pending}</strong> peça(s) não marcada(s) voltarão ao estoque.</p>`
+          : "<p>Todas as peças foram marcadas. O kit será encerrado e o card removido do fluxo.</p>",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#059669",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Sim, finalizar",
+      cancelButtonText: "Cancelar",
+    });
+
+    if (!result.isConfirmed) return;
+
+    setFinalizingBusiness(true);
+    try {
+      const res = await fetch(
+        `${apiUrl}/flow/business/${businessDetail.id}/finalize`,
+        {
+          method: "POST",
+          headers: authHeader,
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Erro ao finalizar negócio");
+      }
+
+      setBoard((prev) =>
+        prev
+          ? {
+              ...prev,
+              cards: prev.cards.filter(
+                (entry) => entry.id !== businessDetail.id
+              ),
+            }
+          : prev
+      );
+      setBusinessOpen(false);
+      setBusinessDetail(null);
+      toast.success(data?.message || "Kit finalizado");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao finalizar negócio");
+    } finally {
+      setFinalizingBusiness(false);
+    }
+  }
+
   const cardsByStep = useMemo(() => {
     if (!board) return new Map<number, Card[]>();
     const map = new Map<number, Card[]>();
@@ -296,6 +448,23 @@ export default function FluxoPage() {
     }
     return map;
   }, [board]);
+
+  useEffect(() => {
+    if (cardMenuOpenId == null) return;
+
+    function closeCardMenu() {
+      setCardMenuOpenId(null);
+    }
+
+    const timer = window.setTimeout(() => {
+      document.addEventListener("click", closeCardMenu);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("click", closeCardMenu);
+    };
+  }, [cardMenuOpenId]);
 
   useEffect(() => {
     async function load() {
@@ -875,11 +1044,50 @@ export default function FluxoPage() {
                           if (dragMovedRef.current) return;
                           if (c.kitId) openBusinessDetail(c);
                         }}
-                        className={`bg-slate-50 border border-slate-200 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:bg-slate-100 transition ${
+                        className={`relative bg-slate-50 border border-slate-200 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:bg-slate-100 transition ${
                           c.kitId ? "hover:border-[#b8860b]/40" : ""
                         }`}
                       >
-                        <div className="text-sm font-semibold text-slate-900">
+                        {c.kitId ? (
+                          <div className="absolute top-2 right-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCardMenuOpenId((prev) =>
+                                  prev === c.id ? null : c.id
+                                );
+                              }}
+                              className="p-1 rounded-md text-slate-400 hover:bg-white hover:text-slate-700 transition"
+                              title="Opções do card"
+                              aria-label="Opções do card"
+                            >
+                              <FiMoreVertical size={16} />
+                            </button>
+                            {cardMenuOpenId === c.id ? (
+                              <div
+                                className="absolute right-0 mt-1 z-20 min-w-[190px] rounded-lg border border-slate-200 bg-white shadow-lg py-1 text-left"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                  onClick={() => openTransferModal(c)}
+                                >
+                                  Mover para outro board
+                                </button>
+                                <button
+                                  type="button"
+                                  className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                                  onClick={() => handleCancelCard(c)}
+                                >
+                                  Remover do fluxo
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        <div className="text-sm font-semibold text-slate-900 pr-7">
                           {c.title}
                         </div>
                         {c.reseller?.name && (
@@ -1327,8 +1535,66 @@ export default function FluxoPage() {
                 mode="admin"
                 updatingUnitId={updatingUnitId}
                 onToggleUnit={toggleUnitStatus}
+                onFinalize={handleFinalizeBusiness}
+                finalizing={finalizingBusiness}
               />
             ) : null}
+          </Modal>
+
+          <Modal
+            open={transferCardTarget != null}
+            title="Mover card para outro board"
+            onClose={() => {
+              setTransferCardTarget(null);
+              setTransferBoardId("");
+            }}
+          >
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">
+                O card{" "}
+                <strong>{transferCardTarget?.title}</strong> será movido para a
+                primeira etapa do board selecionado.
+              </p>
+              <div>
+                <label className="text-sm font-medium text-slate-700">
+                  Board de destino
+                </label>
+                <select
+                  value={transferBoardId}
+                  onChange={(e) => setTransferBoardId(e.target.value)}
+                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-black"
+                >
+                  <option value="">Selecione um board...</option>
+                  {boards
+                    .filter((entry) => entry.id !== board?.id)
+                    .map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTransferCardTarget(null);
+                    setTransferBoardId("");
+                  }}
+                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition text-slate-800 text-sm font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTransferCard}
+                  disabled={transferringCard || !transferBoardId}
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {transferringCard ? "Movendo..." : "Mover card"}
+                </button>
+              </div>
+            </div>
           </Modal>
         </div>
       </MainLayout>

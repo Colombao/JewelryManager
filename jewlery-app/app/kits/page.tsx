@@ -12,6 +12,14 @@ import Modal from "../components/Modal";
 import RequireAuth from "../components/RequireAuth";
 import TableActions from "../components/TableActions";
 import {
+  ClosureUnit,
+  getPaymentStatusClass,
+  getPaymentStatusLabel,
+  getPaymentStatusLabelForPayment,
+  getSettlementEventLabel,
+  KitSettlementDetail,
+} from "@/lib/settlement";
+import {
   createLineFromKitItem,
   formatBRL,
   getCommissionLabel,
@@ -33,6 +41,10 @@ interface KitSummary {
   commissionValue: string;
   reseller: { id: number; name: string } | null;
   card: { id: number; title: string } | null;
+  settlement?: {
+    amountDue: string | number;
+    paymentStatus: KitSettlementDetail["paymentStatus"];
+  } | null;
   _count: { items: number };
 }
 
@@ -46,6 +58,7 @@ interface KitDetail extends Omit<KitSummary, "_count"> {
   commissionRate: string;
   paymentDiscount: string;
   discountValue: string;
+  settlement?: KitSettlementDetail | null;
   items: {
     id: number;
     productId?: number | null;
@@ -74,14 +87,70 @@ function canDeleteKit(kit: Pick<KitSummary, "card" | "status">) {
   return !kit.card && kit.status === "montado";
 }
 
+function canEditKit(kit: Pick<KitSummary, "status">) {
+  return kit.status !== "finalizado";
+}
+
+function ClosureUnitList({
+  title,
+  units,
+  tone,
+}: {
+  title: string;
+  units: ClosureUnit[];
+  tone: "emerald" | "slate" | "red";
+}) {
+  const toneClass =
+    tone === "emerald"
+      ? "border-emerald-200 bg-emerald-50/60"
+      : tone === "red"
+      ? "border-red-200 bg-red-50/60"
+      : "border-slate-200 bg-slate-50/60";
+
+  if (!units || units.length === 0) {
+    return (
+      <div className={`rounded-lg border p-3 ${toneClass}`}>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+          {title}
+        </p>
+        <p className="text-sm text-slate-500">Nenhuma peça</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`rounded-lg border p-3 ${toneClass}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+        {title} ({units.length})
+      </p>
+      <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+        {units.map((unit) => (
+          <li key={unit.id} className="text-sm text-slate-700 flex justify-between gap-3">
+            <span className="truncate">
+              {unit.reference} · {unit.description}
+              {unit.pieceLabel ? ` · ${unit.pieceLabel}` : ""}
+            </span>
+            <span className="shrink-0 tabular-nums font-medium">
+              {formatBRL(parseDecimal(unit.unitPrice))}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function getStatusLabel(kit: Pick<KitSummary, "card" | "status">) {
   if (kit.card) return "No fluxo";
   if (kit.status === "montado") return "Montado";
+  if (kit.status === "finalizado") return "Finalizado";
+  if (kit.status === "vinculado") return "Vinculado";
   return kit.status;
 }
 
-function getStatusClass(kit: Pick<KitSummary, "card">) {
+function getStatusClass(kit: Pick<KitSummary, "card" | "status">) {
   if (kit.card) return "bg-blue-100 text-blue-800";
+  if (kit.status === "finalizado") return "bg-emerald-100 text-emerald-800";
   return "bg-amber-100 text-amber-800";
 }
 
@@ -96,6 +165,10 @@ export default function KitsMontados() {
   const [selectedKit, setSelectedKit] = useState<KitDetail | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [confirmingPaymentId, setConfirmingPaymentId] = useState<number | null>(
+    null
+  );
 
   async function loadKits() {
     try {
@@ -147,6 +220,80 @@ export default function KitsMontados() {
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao excluir kit");
+    }
+  }
+
+  async function handleConfirmPayment(paymentId: number) {
+    if (!selectedKit?.settlement) return;
+
+    const targetPayment = selectedKit.settlement.payments.find(
+      (payment) => payment.id === paymentId
+    );
+
+    if (!targetPayment || targetPayment.status !== "informado") return;
+
+    const ok = confirm(
+      `Confirmar recebimento de ${formatBRL(parseDecimal(targetPayment.amount))}?`
+    );
+    if (!ok) return;
+
+    setConfirmingPaymentId(paymentId);
+    try {
+      const res = await fetch(
+        `${apiUrl}/kits/${selectedKit.id}/settlement/payments/${paymentId}/confirm`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Erro ao confirmar parcela");
+
+      toast.success(data?.message || "Parcela confirmada");
+      await openKitDetail(selectedKit.id);
+      await loadKits();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao confirmar parcela");
+    } finally {
+      setConfirmingPaymentId(null);
+    }
+  }
+
+  async function handleConfirmAllPending() {
+    if (!selectedKit?.settlement) return;
+
+    const pending = selectedKit.settlement.payments.filter(
+      (payment) => payment.status === "informado"
+    );
+
+    if (pending.length === 0) {
+      toast.error("Não há parcelas aguardando confirmação");
+      return;
+    }
+
+    const total = pending.reduce(
+      (sum, payment) => sum + parseDecimal(payment.amount),
+      0
+    );
+
+    const ok = confirm(
+      `Confirmar ${pending.length} parcela(s) no total de ${formatBRL(total)}?`
+    );
+    if (!ok) return;
+
+    setConfirmingPayment(true);
+    try {
+      const res = await fetch(
+        `${apiUrl}/kits/${selectedKit.id}/settlement/confirm`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Erro ao confirmar pagamento");
+
+      toast.success(data?.message || "Pagamentos confirmados");
+      await openKitDetail(selectedKit.id);
+      await loadKits();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao confirmar pagamento");
+    } finally {
+      setConfirmingPayment(false);
     }
   }
 
@@ -209,9 +356,13 @@ export default function KitsMontados() {
             </button>
             <Link
               href={`/kit?edit=${kit.id}`}
-              title="Editar kit"
+              title={canEditKit(kit) ? "Editar kit" : "Kit finalizado não pode ser editado"}
               aria-label="Editar kit"
-              className="p-1.5 rounded-md text-blue-600 hover:bg-blue-100 transition inline-flex"
+              className={`p-1.5 rounded-md transition inline-flex ${
+                canEditKit(kit)
+                  ? "text-blue-600 hover:bg-blue-100"
+                  : "text-slate-300 pointer-events-none"
+              }`}
             >
               <FiEdit2 size={16} />
             </Link>
@@ -264,6 +415,28 @@ export default function KitsMontados() {
         render: (kit) => kit.reseller?.name || "-",
       },
       {
+        key: "payment",
+        header: "Acerto",
+        render: (kit) => {
+          if (kit.status !== "finalizado" || !kit.settlement) {
+            return <span className="text-slate-400">—</span>;
+          }
+
+          return (
+            <div className="space-y-1">
+              <span
+                className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${getPaymentStatusClass(kit.settlement.paymentStatus)}`}
+              >
+                {getPaymentStatusLabel(kit.settlement.paymentStatus)}
+              </span>
+              <p className="text-xs text-slate-600 tabular-nums">
+                {formatBRL(parseDecimal(kit.settlement.amountDue))}
+              </p>
+            </div>
+          );
+        },
+      },
+      {
         key: "status",
         header: "Status",
         render: (kit) => (
@@ -291,8 +464,12 @@ export default function KitsMontados() {
           <FiEye size={18} />
         </button>
         <Link
-          href={`/kit?edit=${kit.id}`}
-          className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition"
+          href={canEditKit(kit) ? `/kit?edit=${kit.id}` : "#"}
+          className={`p-2 rounded-lg transition ${
+            canEditKit(kit)
+              ? "text-blue-600 hover:bg-blue-50"
+              : "text-slate-300 pointer-events-none"
+          }`}
           aria-label="Editar"
         >
           <FiEdit2 size={18} />
@@ -379,7 +556,7 @@ export default function KitsMontados() {
                 : "Nenhum kit montado ainda."
             }
             loadingMessage="Carregando kits..."
-            minWidth="960px"
+            minWidth="1100px"
             mobileCardRender={renderKitMobileCard}
           />
 
@@ -423,6 +600,171 @@ export default function KitsMontados() {
                   <div className="p-3 bg-slate-50 rounded-lg text-sm">
                     <p className="text-xs text-slate-500 uppercase mb-1">Revendedora</p>
                     <p className="font-medium">{selectedKit.reseller.name}</p>
+                  </div>
+                )}
+
+                {selectedKit.settlement && (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-[#b8860b]/20 bg-gradient-to-br from-[#fffaf0] to-white p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-[#9a7209] mb-1">
+                            Acerto com revendedora
+                          </p>
+                          <p className="text-2xl font-bold text-slate-900 tabular-nums">
+                            {formatBRL(parseDecimal(selectedKit.settlement.amountDue))}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Confirmado:{" "}
+                            {formatBRL(selectedKit.settlement.amountConfirmed)} · Saldo:{" "}
+                            {formatBRL(selectedKit.settlement.amountRemaining)}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getPaymentStatusClass(selectedKit.settlement.paymentStatus)}`}
+                        >
+                          {getPaymentStatusLabel(selectedKit.settlement.paymentStatus)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                        <div className="rounded-lg bg-white/80 border border-emerald-100 p-3">
+                          <p className="text-xs text-slate-500">Vendidas</p>
+                          <p className="font-semibold text-emerald-700">
+                            {selectedKit.settlement.soldCount} ·{" "}
+                            {formatBRL(parseDecimal(selectedKit.settlement.soldValue))}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-white/80 border border-red-100 p-3">
+                          <p className="text-xs text-slate-500">Perdidas/falta</p>
+                          <p className="font-semibold text-red-700">
+                            {selectedKit.settlement.lostCount} ·{" "}
+                            {formatBRL(parseDecimal(selectedKit.settlement.lostValue))}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-white/80 border border-slate-200 p-3">
+                          <p className="text-xs text-slate-500">Devolvidas ao estoque</p>
+                          <p className="font-semibold text-slate-700">
+                            {selectedKit.settlement.returnedCount} ·{" "}
+                            {formatBRL(parseDecimal(selectedKit.settlement.returnedValue))}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedKit.settlement.closure && (
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                        <ClosureUnitList
+                          title="Vendidas"
+                          units={selectedKit.settlement.closure.soldUnits}
+                          tone="emerald"
+                        />
+                        <ClosureUnitList
+                          title="Devolvidas"
+                          units={selectedKit.settlement.closure.returnedUnits}
+                          tone="slate"
+                        />
+                        <ClosureUnitList
+                          title="Perdidas / falta"
+                          units={selectedKit.settlement.closure.lostUnits}
+                          tone="red"
+                        />
+                      </div>
+                    )}
+
+                    <div className="rounded-lg border border-slate-200 p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-3">
+                        Parcelas de pagamento
+                      </p>
+                      {selectedKit.settlement.payments.length === 0 ? (
+                        <p className="text-sm text-slate-500">
+                          Nenhuma parcela informada ainda.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {selectedKit.settlement.payments.map((payment) => (
+                            <div
+                              key={payment.id}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"
+                            >
+                              <div>
+                                <p className="text-sm font-semibold text-slate-800 tabular-nums">
+                                  {formatBRL(parseDecimal(payment.amount))}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {formatDate(payment.reportedAt)}
+                                  {payment.note ? ` · ${payment.note}` : ""}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                    payment.status === "confirmado"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-amber-100 text-amber-700"
+                                  }`}
+                                >
+                                  {getPaymentStatusLabelForPayment(payment.status)}
+                                </span>
+                                {payment.status === "informado" ? (
+                                  <Button
+                                    type="button"
+                                    onClick={() => handleConfirmPayment(payment.id)}
+                                    disabled={confirmingPaymentId === payment.id}
+                                  >
+                                    {confirmingPaymentId === payment.id
+                                      ? "Confirmando..."
+                                      : "Confirmar"}
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-3">
+                        Histórico
+                      </p>
+                      <div className="space-y-3">
+                        {selectedKit.settlement.events.map((event) => (
+                          <div
+                            key={event.id}
+                            className="flex gap-3 text-sm border-l-2 border-slate-200 pl-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-slate-800">
+                                {getSettlementEventLabel(event.type)}
+                              </p>
+                              {event.note ? (
+                                <p className="text-slate-500">{event.note}</p>
+                              ) : null}
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                {formatDate(event.createdAt)} ·{" "}
+                                {event.actor === "empresa" ? "Empresa" : "Revendedora"}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {selectedKit.settlement.payments.some(
+                      (payment) => payment.status === "informado"
+                    ) ? (
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          onClick={handleConfirmAllPending}
+                          disabled={confirmingPayment}
+                        >
+                          {confirmingPayment
+                            ? "Confirmando..."
+                            : "Confirmar todas as parcelas pendentes"}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 )}
 
@@ -516,12 +858,18 @@ export default function KitsMontados() {
                 )}
 
                 <div className="flex justify-end gap-3">
-                  <Link
-                    href={`/kit?edit=${selectedKit.id}`}
-                    className="inline-flex items-center justify-center px-4 py-2 rounded-md font-medium bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md hover:from-blue-700 hover:to-blue-600"
-                  >
-                    Editar kit
-                  </Link>
+                  {canEditKit(selectedKit) ? (
+                    <Link
+                      href={`/kit?edit=${selectedKit.id}`}
+                      className="inline-flex items-center justify-center px-4 py-2 rounded-md font-medium bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md hover:from-blue-700 hover:to-blue-600"
+                    >
+                      Editar kit
+                    </Link>
+                  ) : (
+                    <p className="text-sm text-slate-500 self-center mr-auto">
+                      Kits finalizados não podem ser editados.
+                    </p>
+                  )}
                   {canDeleteKit(selectedKit) ? (
                     <Button
                       type="button"

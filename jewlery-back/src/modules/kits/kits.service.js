@@ -3,6 +3,7 @@ import {
   buildCardDescriptionFromKit,
   ensureKitUnits,
 } from "../flow/flow.utils.js";
+import { getSettlementByKitId } from "./kit-settlement.service.js";
 
 function toNumber(value, fallback = 0) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -36,6 +37,19 @@ function kitInclude() {
         phone: true,
       },
     },
+    settlement: {
+      select: {
+        id: true,
+        amountDue: true,
+        paymentStatus: true,
+        soldCount: true,
+        lostCount: true,
+        returnedCount: true,
+        finalizedAt: true,
+        paidAt: true,
+        confirmedAt: true,
+      },
+    },
     items: {
       orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
       include: {
@@ -46,6 +60,9 @@ function kitInclude() {
             name: true,
             image: true,
           },
+        },
+        units: {
+          orderBy: { unitIndex: "asc" },
         },
       },
     },
@@ -194,6 +211,12 @@ export const kitsService = {
         card: {
           select: { id: true, title: true },
         },
+        settlement: {
+          select: {
+            amountDue: true,
+            paymentStatus: true,
+          },
+        },
         _count: { select: { items: true } },
       },
     });
@@ -203,6 +226,7 @@ export const kitsService = {
     return prisma.kit.findMany({
       where: {
         card: null,
+        status: "montado",
       },
       orderBy: { kitNumber: "desc" },
       include: {
@@ -212,10 +236,22 @@ export const kitsService = {
   },
 
   async getById(id) {
-    return prisma.kit.findUnique({
+    const kit = await prisma.kit.findUnique({
       where: { id },
       include: kitInclude(),
     });
+
+    if (!kit) return null;
+
+    if (kit.status === "finalizado") {
+      const settlement = await getSettlementByKitId(id);
+      return {
+        ...kit,
+        settlement,
+      };
+    }
+
+    return kit;
   },
 
   async getByNumber(kitNumber) {
@@ -317,6 +353,10 @@ export const kitsService = {
     });
     if (!existing) {
       throw new Error("Kit não encontrado");
+    }
+
+    if (existing.status === "finalizado") {
+      throw new Error("Kits finalizados não podem ser editados");
     }
 
     if (!Array.isArray(items) || items.length === 0) {

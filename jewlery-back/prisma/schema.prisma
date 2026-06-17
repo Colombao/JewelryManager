@@ -30,8 +30,9 @@ model Reseller {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  kits      Kit[]
-  cards     Card[]
+  kits        Kit[]
+  cards       Card[]
+  settlements KitSettlement[]
 }
 
 model Supplier {
@@ -182,9 +183,69 @@ model Kit {
 
   items            KitItem[]
   card             Card?
+  settlement       KitSettlement?
 
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+}
+
+model KitSettlement {
+  id               Int      @id @default(autoincrement())
+  kitId            Int      @unique
+  kit              Kit      @relation(fields: [kitId], references: [id], onDelete: Cascade)
+
+  resellerId       Int?
+  reseller         Reseller? @relation(fields: [resellerId], references: [id])
+
+  amountDue        Decimal  @db.Decimal(10, 2)
+  soldValue        Decimal  @default(0) @db.Decimal(10, 2)
+  lostValue        Decimal  @default(0) @db.Decimal(10, 2)
+  returnedValue    Decimal  @default(0) @db.Decimal(10, 2)
+  soldCount        Int      @default(0)
+  lostCount        Int      @default(0)
+  returnedCount    Int      @default(0)
+  commissionRate   Decimal  @default(0) @db.Decimal(5, 4)
+  commissionAmount Decimal  @default(0) @db.Decimal(10, 2)
+
+  paymentStatus    String   @default("pendente")
+
+  finalizedAt      DateTime @default(now())
+  paidAt           DateTime?
+  confirmedAt      DateTime?
+
+  events           KitSettlementEvent[]
+  payments         KitSettlementPayment[]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model KitSettlementPayment {
+  id           Int           @id @default(autoincrement())
+  settlementId Int
+  settlement   KitSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  amount       Decimal       @db.Decimal(10, 2)
+  note         String?       @db.Text
+  status       String        @default("informado")
+
+  reportedAt   DateTime      @default(now())
+  confirmedAt  DateTime?
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model KitSettlementEvent {
+  id           Int           @id @default(autoincrement())
+  settlementId Int
+  settlement   KitSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  type         String
+  note         String?       @db.Text
+  actor        String
+
+  createdAt    DateTime      @default(now())
 }
 
 model KitItem {

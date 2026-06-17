@@ -1,6 +1,11 @@
 import prisma from "../../database/prismaClient.js";
 import { calculateBusinessPayment } from "../../utils/commission.js";
-import { ensureKitUnits, flattenKitUnits } from "./flow.utils.js";
+import { createSettlementForKit } from "../kits/kit-settlement.service.js";
+import {
+  ensureKitUnits,
+  flattenKitUnits,
+  restorePendingUnitsToStock,
+} from "./flow.utils.js";
 
 function mapUnitRow(row) {
   return {
@@ -71,6 +76,7 @@ async function buildBusinessPayload(card, refreshedKit) {
       totalQty: refreshedKit.totalQty,
       grandTotal: refreshedKit.grandTotal,
       finalTotal: refreshedKit.finalTotal,
+      status: refreshedKit.status,
     },
     units,
     summary,
@@ -256,6 +262,212 @@ async function updateBusinessUnitByCardId(
   };
 }
 
+async function cancelBusinessByCardId(cardId) {
+  const card = await prisma.card.findUnique({
+    where: { id: cardId },
+    include: {
+      kit: {
+        select: {
+          id: true,
+          kitNumber: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (!card?.kitId || !card.kit) {
+    const error = new Error("Negócio não encontrado");
+    error.status = 404;
+    throw error;
+  }
+
+  if (card.kit.status === "finalizado") {
+    const error = new Error("Kit já finalizado não pode ser removido do fluxo");
+    error.status = 400;
+    throw error;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.card.delete({ where: { id: card.id } });
+
+    await tx.kit.update({
+      where: { id: card.kitId },
+      data: {
+        status: "montado",
+        resellerId: null,
+        clientName: null,
+        clientAddress: null,
+        clientCity: null,
+        clientCpf: null,
+        clientPhone: null,
+        clientEmail: null,
+      },
+    });
+
+    await tx.kitItemUnit.updateMany({
+      where: { kitItem: { kitId: card.kitId } },
+      data: {
+        soldByOwner: false,
+        soldByReseller: false,
+        missingOrLost: false,
+      },
+    });
+  });
+
+  return {
+    message: "Negócio removido do fluxo. Kit disponível novamente.",
+    kitId: card.kitId,
+    kitNumber: card.kit.kitNumber,
+  };
+}
+
+async function finalizeBusinessByCardId(cardId) {
+  const card = await prisma.card.findUnique({
+    where: { id: cardId },
+    include: {
+      kit: {
+        select: {
+          id: true,
+          kitNumber: true,
+          status: true,
+          resellerId: true,
+        },
+      },
+    },
+  });
+
+  if (!card?.kitId || !card.kit) {
+    const error = new Error("Negócio não encontrado");
+    error.status = 404;
+    throw error;
+  }
+
+  if (card.kit.status === "finalizado") {
+    const error = new Error("Este kit já foi finalizado");
+    error.status = 400;
+    throw error;
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const { returnedUnits } = await restorePendingUnitsToStock(tx, card.kitId);
+
+    await tx.kit.update({
+      where: { id: card.kitId },
+      data: { status: "finalizado" },
+    });
+
+    const settlement = await createSettlementForKit(
+      tx,
+      card.kitId,
+      card.resellerId ?? card.kit.resellerId
+    );
+
+    await tx.card.delete({ where: { id: card.id } });
+
+    return { returnedUnits, settlement };
+  });
+
+  return {
+    message: "Kit finalizado com sucesso",
+    kitId: card.kitId,
+    kitNumber: card.kit.kitNumber,
+    returnedUnits: result.returnedUnits,
+    settlement: {
+      amountDue: result.settlement.amountDue,
+      paymentStatus: result.settlement.paymentStatus,
+    },
+  };
+}
+
+async function transferCardToBoard(cardId, { boardId, stepId }) {
+  const parsedBoardId = Number(boardId);
+  if (!Number.isFinite(parsedBoardId) || parsedBoardId <= 0) {
+    const error = new Error("boardId inválido");
+    error.status = 400;
+    throw error;
+  }
+
+  const card = await prisma.card.findUnique({
+    where: { id: cardId },
+    include: {
+      kit: { select: { status: true } },
+    },
+  });
+
+  if (!card) {
+    const error = new Error("Card não encontrado");
+    error.status = 404;
+    throw error;
+  }
+
+  if (card.kit?.status === "finalizado") {
+    const error = new Error("Kit finalizado não pode ser movido");
+    error.status = 400;
+    throw error;
+  }
+
+  const board = await prisma.board.findUnique({
+    where: { id: parsedBoardId },
+    include: { steps: true },
+  });
+
+  if (!board) {
+    const error = new Error("Board não encontrado");
+    error.status = 404;
+    throw error;
+  }
+
+  if (board.steps.length === 0) {
+    const error = new Error("Board de destino não possui etapas");
+    error.status = 400;
+    throw error;
+  }
+
+  let targetStepId = stepId ? Number(stepId) : null;
+  if (targetStepId) {
+    const stepExists = board.steps.some((step) => step.id === targetStepId);
+    if (!stepExists) {
+      const error = new Error("Etapa não pertence ao board de destino");
+      error.status = 400;
+      throw error;
+    }
+  } else {
+    targetStepId = [...board.steps].sort((a, b) => a.order - b.order)[0].id;
+  }
+
+  const cardsInStep = await prisma.card.count({
+    where: { stepId: targetStepId },
+  });
+
+  const updated = await prisma.card.update({
+    where: { id: card.id },
+    data: {
+      boardId: board.id,
+      stepId: targetStepId,
+      order: cardsInStep,
+    },
+    include: {
+      kit: {
+        select: {
+          id: true,
+          kitNumber: true,
+          totalQty: true,
+          grandTotal: true,
+        },
+      },
+      reseller: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  return updated;
+}
+
 async function listBusinessesForReseller(resellerId) {
   const cards = await prisma.card.findMany({
     where: {
@@ -294,7 +506,10 @@ async function listBusinessesForReseller(resellerId) {
 }
 
 export {
+  cancelBusinessByCardId,
+  finalizeBusinessByCardId,
   getBusinessDetailByCardId,
   listBusinessesForReseller,
+  transferCardToBoard,
   updateBusinessUnitByCardId,
 };

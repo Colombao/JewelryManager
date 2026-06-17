@@ -148,6 +148,11 @@ export default function MontarKit() {
           if (!kitRes.ok) throw new Error("Kit não encontrado");
 
           const kit = await kitRes.json();
+
+          if (kit.status === "finalizado") {
+            throw new Error("Kits finalizados não podem ser editados");
+          }
+
           setEditingKitId(kit.id);
           setKitNumber(kit.kitNumber);
           setIssueDate(parseApiDateInput(kit.issueDate));

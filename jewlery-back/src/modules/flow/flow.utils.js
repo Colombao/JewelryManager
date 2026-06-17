@@ -60,6 +60,45 @@ function flattenKitUnits(items) {
   return units;
 }
 
+function isUnitSettled(unit) {
+  return (
+    unit.missingOrLost || (unit.soldByOwner && unit.soldByReseller)
+  );
+}
+
+async function restorePendingUnitsToStock(tx, kitId) {
+  const units = await tx.kitItemUnit.findMany({
+    where: { kitItem: { kitId } },
+    include: {
+      kitItem: {
+        select: { productId: true },
+      },
+    },
+  });
+
+  const increments = new Map();
+  let returnedUnits = 0;
+
+  for (const unit of units) {
+    if (isUnitSettled(unit)) continue;
+
+    const productId = unit.kitItem.productId;
+    if (!productId) continue;
+
+    returnedUnits += 1;
+    increments.set(productId, (increments.get(productId) ?? 0) + 1);
+  }
+
+  for (const [productId, qty] of increments) {
+    await tx.product.update({
+      where: { id: productId },
+      data: { quantity: { increment: qty } },
+    });
+  }
+
+  return { returnedUnits };
+}
+
 function buildCardDescriptionFromKit(kit) {
   const totalQty = kit.totalQty ?? 0;
   const grandTotal = Number(kit.grandTotal ?? 0);
@@ -70,4 +109,10 @@ function buildCardDescriptionFromKit(kit) {
   })}`;
 }
 
-export { buildCardDescriptionFromKit, ensureKitUnits, flattenKitUnits };
+export {
+  buildCardDescriptionFromKit,
+  ensureKitUnits,
+  flattenKitUnits,
+  isUnitSettled,
+  restorePendingUnitsToStock,
+};

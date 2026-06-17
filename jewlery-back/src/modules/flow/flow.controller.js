@@ -1,6 +1,9 @@
 import prisma from "../../database/prismaClient.js";
 import {
+  cancelBusinessByCardId,
+  finalizeBusinessByCardId,
   getBusinessDetailByCardId,
+  transferCardToBoard,
   updateBusinessUnitByCardId,
 } from "./flow.business.service.js";
 import {
@@ -237,6 +240,18 @@ async function createBusiness(req, res) {
         .json({ error: "Este kit já está vinculado a um negócio" });
     }
 
+    if (kit.status === "finalizado") {
+      return res
+        .status(400)
+        .json({ error: "Kits finalizados não podem ser vinculados a um negócio" });
+    }
+
+    if (kit.status !== "montado") {
+      return res
+        .status(400)
+        .json({ error: "Somente kits montados podem ser vinculados a um negócio" });
+    }
+
     const reseller = await prisma.reseller.findUnique({
       where: { id: Number(resellerId) },
     });
@@ -391,6 +406,62 @@ async function updateBusinessUnitStatus(req, res) {
   }
 }
 
+async function cancelCard(req, res) {
+  try {
+    const parsed = parseSafeId(req.params.cardId, "cardId");
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const result = await cancelBusinessByCardId(parsed.value);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({
+      error: err.message || "internal error",
+    });
+  }
+}
+
+async function finalizeBusiness(req, res) {
+  try {
+    const parsed = parseSafeId(req.params.cardId, "cardId");
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const result = await finalizeBusinessByCardId(parsed.value);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({
+      error: err.message || "internal error",
+    });
+  }
+}
+
+async function transferCard(req, res) {
+  try {
+    const parsed = parseSafeId(req.params.cardId, "cardId");
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const { boardId, stepId } = req.body;
+    if (!boardId) {
+      return res.status(400).json({ error: "boardId é obrigatório" });
+    }
+
+    const result = await transferCardToBoard(parsed.value, { boardId, stepId });
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({
+      error: err.message || "internal error",
+    });
+  }
+}
+
 async function moveCard(req, res) {
   try {
     const { cardId } = req.params;
@@ -535,12 +606,14 @@ async function deleteBoard(req, res) {
 }
 
 export {
+  cancelCard,
   createBoard,
   createBusiness,
   createCard,
   createStep,
   deleteBoard,
   deleteStep,
+  finalizeBusiness,
   getBoard,
   getBoardById,
   getBoards,
@@ -548,6 +621,7 @@ export {
   moveCard,
   reorderSteps,
   requireToken,
+  transferCard,
   updateBusinessUnitStatus,
   updateStep,
 };
