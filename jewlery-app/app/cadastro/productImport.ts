@@ -1,4 +1,8 @@
 import * as XLSX from "xlsx";
+import {
+  getMarginMultipliers,
+  ProfitMargin,
+} from "@/lib/pricing";
 
 export interface ImportProductRow {
   code?: string;
@@ -27,6 +31,31 @@ export interface ImportProductRow {
 export type ImportProductInput = ImportProductRow & {
   imageFile?: File;
 };
+
+function toAmount(value: string | number | undefined): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const amount = Number(String(value).replace(",", "."));
+  return Number.isFinite(amount) ? amount : null;
+}
+
+export function applyImportPriceLevels(
+  items: ImportProductInput[],
+  margins: ProfitMargin[]
+): ImportProductInput[] {
+  const multipliers = getMarginMultipliers(margins);
+
+  return items.map((item) => {
+    const grandTotal = toAmount(item.grandTotal);
+    if (grandTotal === null || grandTotal <= 0) return item;
+
+    return {
+      ...item,
+      priceLevel1: (grandTotal * multipliers.level1).toFixed(2),
+      priceLevel2: (grandTotal * multipliers.level2).toFixed(2),
+      priceLevel3: (grandTotal * multipliers.level3).toFixed(2),
+    };
+  });
+}
 
 const COLUMN_ALIASES: Record<string, keyof ImportProductRow | "skip"> = {
   cod: "code",

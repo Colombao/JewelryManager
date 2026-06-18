@@ -360,7 +360,7 @@ export async function parsePdfCatalog(file: File): Promise<PdfImportResult> {
 
     if (pageNumber === 1) {
       meta = extractCatalogMeta(pageText);
-      collectionName = meta.clientName;
+      collectionName = meta.orderNumber;
     }
 
     const pageProducts = parseProductsFromPageText(pageText, collectionName);

@@ -15,11 +15,13 @@ import Modal from "../components/Modal";
 import RequireAuth from "../components/RequireAuth";
 import TableActions, { StatusBadge } from "../components/TableActions";
 import {
+  applyImportPriceLevels,
   IMPORT_FILE_ACCEPT,
   ImportProductInput,
   importProductsInBatches,
   parseSpreadsheetFile,
 } from "./productImport";
+import ImportLoader from "./ImportLoader";
 import { parsePdfCatalog, type PdfCatalogMeta } from "./pdfImport";
 
 interface NamedItem {
@@ -124,6 +126,8 @@ export default function CadastroItem() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importPreview, setImportPreview] = useState<ImportProductInput[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [isParsingImport, setIsParsingImport] = useState(false);
+  const [importParsingMessage, setImportParsingMessage] = useState("");
   const [importProgress, setImportProgress] = useState({ done: 0, total: 0 });
   const [importImageProgress, setImportImageProgress] = useState({
     done: 0,
@@ -381,34 +385,47 @@ export default function CadastroItem() {
     e.target.value = "";
     if (!file) return;
 
-    try {
-      const isPdf =
-        file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    const isPdf =
+      file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 
+    setShowImportModal(true);
+    setIsParsingImport(true);
+    setImportPreview([]);
+    setImportMeta(null);
+    setImportParsingMessage(
+      isPdf
+        ? "Lendo catálogo e extraindo fotos..."
+        : "Lendo planilha..."
+    );
+
+    try {
       if (isPdf) {
         const { products, meta } = await parsePdfCatalog(file);
         if (products.length === 0) {
           toast.error("Nenhum produto válido encontrado no PDF");
+          setShowImportModal(false);
           return;
         }
         setImportMeta(meta);
-        setImportPreview(products);
-        setShowImportModal(true);
+        setImportPreview(applyImportPriceLevels(products, profitMargins));
         return;
       }
 
       const rows = await parseSpreadsheetFile(file);
       if (rows.length === 0) {
         toast.error("Nenhum produto válido encontrado na planilha");
+        setShowImportModal(false);
         return;
       }
       setImportMeta(null);
-      setImportPreview(rows);
-      setShowImportModal(true);
+      setImportPreview(applyImportPriceLevels(rows, profitMargins));
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Erro ao ler arquivo de importação"
       );
+      setShowImportModal(false);
+    } finally {
+      setIsParsingImport(false);
     }
   }
 
@@ -1028,13 +1045,37 @@ export default function CadastroItem() {
               size="2xl"
               title="Importar produtos"
               onClose={() => {
-                if (isImporting) return;
+                if (isImporting || isParsingImport) return;
                 setShowImportModal(false);
                 setImportPreview([]);
                 setImportMeta(null);
               }}
             >
+              {isParsingImport ? (
+                <ImportLoader
+                  title={importParsingMessage}
+                  subtitle={
+                    importParsingMessage.includes("PDF") ||
+                    importParsingMessage.includes("catálogo")
+                      ? "PDFs com muitas fotos podem levar alguns segundos."
+                      : "Aguarde um momento..."
+                  }
+                />
+              ) : (
               <div className="space-y-4">
+                {isImporting && (
+                  <ImportLoader
+                    title="Salvando produtos..."
+                    subtitle={
+                      importImageProgress.total > 0
+                        ? `Enviando imagens ${importImageProgress.done} de ${importImageProgress.total}`
+                        : `Enviando produtos ${importProgress.done} de ${importProgress.total}`
+                    }
+                  />
+                )}
+
+                {!isImporting && (
+                  <>
                 <p className="text-sm text-slate-600">
                   {importPreview.length} produto(s) prontos para importação.
                   Fornecedores, categorias e tipos de banho serão criados
@@ -1112,6 +1153,8 @@ export default function CadastroItem() {
                     Exibindo 8 de {importPreview.length} linhas na prévia.
                   </p>
                 )}
+                  </>
+                )}
 
                 {isImporting && importImageProgress.total > 0 && (
                   <div className="space-y-2">
@@ -1160,7 +1203,7 @@ export default function CadastroItem() {
                   <Button
                     type="button"
                     variant="secondary"
-                    disabled={isImporting}
+                    disabled={isImporting || isParsingImport}
                     onClick={() => {
                       setShowImportModal(false);
                       setImportPreview([]);
@@ -1169,17 +1212,18 @@ export default function CadastroItem() {
                   >
                     Cancelar
                   </Button>
+                  {!isImporting && (
                   <Button
                     type="button"
-                    disabled={isImporting}
+                    disabled={isImporting || isParsingImport || importPreview.length === 0}
                     onClick={handleConfirmImport}
                   >
-                    {isImporting
-                      ? `Importando (${importProgress.done}/${importProgress.total})...`
-                      : "Confirmar importação"}
+                    Confirmar importação
                   </Button>
+                  )}
                 </div>
               </div>
+              )}
             </Modal>
           </div>
         </div>
