@@ -247,4 +247,57 @@ async function importBulk(req, res) {
   }
 }
 
-export { create, importBulk, list, remove, update };
+async function kitsUsage(req, res) {
+  try {
+    const kitItems = await prisma.kitItem.findMany({
+      where: { productId: { not: null } },
+      select: {
+        productId: true,
+        quantity: true,
+        kit: {
+          select: {
+            id: true,
+            kitNumber: true,
+            status: true,
+            reseller: { select: { id: true, name: true } },
+            card: { select: { id: true, title: true } },
+          },
+        },
+      },
+    });
+
+    const map = {};
+
+    for (const item of kitItems) {
+      const productId = item.productId;
+      if (!productId) continue;
+
+      if (!map[productId]) map[productId] = [];
+
+      const existing = map[productId].find((entry) => entry.id === item.kit.id);
+      if (existing) {
+        existing.quantity += item.quantity;
+      } else {
+        map[productId].push({
+          id: item.kit.id,
+          kitNumber: item.kit.kitNumber,
+          status: item.kit.status,
+          resellerName: item.kit.reseller?.name ?? null,
+          card: item.kit.card,
+          quantity: item.quantity,
+        });
+      }
+    }
+
+    for (const productId of Object.keys(map)) {
+      map[productId].sort((a, b) => b.kitNumber - a.kitNumber);
+    }
+
+    res.json(map);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "internal error" });
+  }
+}
+
+export { create, importBulk, kitsUsage, list, remove, update };
