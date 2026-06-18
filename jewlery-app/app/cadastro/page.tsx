@@ -15,11 +15,12 @@ import Modal from "../components/Modal";
 import RequireAuth from "../components/RequireAuth";
 import TableActions, { StatusBadge } from "../components/TableActions";
 import {
-  IMPORT_ACCEPT,
-  ImportProductRow,
+  IMPORT_FILE_ACCEPT,
+  ImportProductInput,
   importProductsInBatches,
   parseSpreadsheetFile,
 } from "./productImport";
+import { parsePdfCatalog, type PdfCatalogMeta } from "./pdfImport";
 
 interface NamedItem {
   id: number;
@@ -121,13 +122,19 @@ export default function CadastroItem() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [importPreview, setImportPreview] = useState<ImportProductRow[]>([]);
+  const [importPreview, setImportPreview] = useState<ImportProductInput[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ done: 0, total: 0 });
+  const [importImageProgress, setImportImageProgress] = useState({
+    done: 0,
+    total: 0,
+  });
   const [skipDuplicates, setSkipDuplicates] = useState(true);
+  const [importMeta, setImportMeta] = useState<PdfCatalogMeta | null>(null);
   const [search, setSearch] = useState("");
   const [profitMargins, setProfitMargins] = useState<ProfitMargin[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const pdfImportInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -375,16 +382,32 @@ export default function CadastroItem() {
     if (!file) return;
 
     try {
+      const isPdf =
+        file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+      if (isPdf) {
+        const { products, meta } = await parsePdfCatalog(file);
+        if (products.length === 0) {
+          toast.error("Nenhum produto válido encontrado no PDF");
+          return;
+        }
+        setImportMeta(meta);
+        setImportPreview(products);
+        setShowImportModal(true);
+        return;
+      }
+
       const rows = await parseSpreadsheetFile(file);
       if (rows.length === 0) {
         toast.error("Nenhum produto válido encontrado na planilha");
         return;
       }
+      setImportMeta(null);
       setImportPreview(rows);
       setShowImportModal(true);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Erro ao ler planilha"
+        err instanceof Error ? err.message : "Erro ao ler arquivo de importação"
       );
     }
   }
@@ -394,13 +417,18 @@ export default function CadastroItem() {
 
     setIsImporting(true);
     setImportProgress({ done: 0, total: importPreview.length });
+    setImportImageProgress({
+      done: 0,
+      total: importPreview.filter((row) => row.imageFile).length,
+    });
 
     try {
       const data = await importProductsInBatches(
         apiUrl,
         importPreview,
         skipDuplicates,
-        (done, total) => setImportProgress({ done, total })
+        (done, total) => setImportProgress({ done, total }),
+        (done, total) => setImportImageProgress({ done, total })
       );
 
       const errorCount = data.errors.length;
@@ -412,7 +440,9 @@ export default function CadastroItem() {
 
       setShowImportModal(false);
       setImportPreview([]);
+      setImportMeta(null);
       setImportProgress({ done: 0, total: 0 });
+      setImportImageProgress({ done: 0, total: 0 });
       await loadProducts();
       await loadLookups();
     } catch (err) {
@@ -779,7 +809,14 @@ export default function CadastroItem() {
               <input
                 ref={importInputRef}
                 type="file"
-                accept={IMPORT_ACCEPT}
+                accept={IMPORT_FILE_ACCEPT}
+                className="hidden"
+                onChange={handleImportFile}
+              />
+              <input
+                ref={pdfImportInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
                 className="hidden"
                 onChange={handleImportFile}
               />
@@ -789,6 +826,13 @@ export default function CadastroItem() {
                 onClick={() => importInputRef.current?.click()}
               >
                 Importar Excel/CSV
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => pdfImportInputRef.current?.click()}
+              >
+                Importar PDF
               </Button>
               <Button
                 type="button"
@@ -987,6 +1031,7 @@ export default function CadastroItem() {
                 if (isImporting) return;
                 setShowImportModal(false);
                 setImportPreview([]);
+                setImportMeta(null);
               }}
             >
               <div className="space-y-4">
@@ -995,6 +1040,33 @@ export default function CadastroItem() {
                   Fornecedores, categorias e tipos de banho serão criados
                   automaticamente se não existirem.
                 </p>
+
+                {importMeta && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    {importMeta.clientName && (
+                      <p>
+                        <span className="font-medium">Cliente:</span>{" "}
+                        {importMeta.clientName}
+                      </p>
+                    )}
+                    {importMeta.orderNumber && (
+                      <p>
+                        <span className="font-medium">Pedido:</span>{" "}
+                        {importMeta.orderNumber}
+                      </p>
+                    )}
+                    {importMeta.date && (
+                      <p>
+                        <span className="font-medium">Data:</span> {importMeta.date}
+                      </p>
+                    )}
+                    <p>
+                      <span className="font-medium">Imagens:</span>{" "}
+                      {importPreview.filter((row) => row.imageFile).length} de{" "}
+                      {importPreview.length}
+                    </p>
+                  </div>
+                )}
 
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -1041,6 +1113,28 @@ export default function CadastroItem() {
                   </p>
                 )}
 
+                {isImporting && importImageProgress.total > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Enviando imagens...</span>
+                      <span>
+                        {importImageProgress.done} / {importImageProgress.total}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 transition-all duration-300"
+                        style={{
+                          width: `${Math.round(
+                            (importImageProgress.done / importImageProgress.total) *
+                              100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {isImporting && importProgress.total > 0 && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs text-slate-600">
@@ -1070,6 +1164,7 @@ export default function CadastroItem() {
                     onClick={() => {
                       setShowImportModal(false);
                       setImportPreview([]);
+                      setImportMeta(null);
                     }}
                   >
                     Cancelar

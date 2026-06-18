@@ -66,6 +66,7 @@ function buildProductData(item, ids) {
     barcode: item.barcode?.trim() || null,
     name,
     description: item.description?.trim() || name,
+    image: item.image?.trim() || null,
     supplierId: ids.supplierId,
     categoryId: ids.categoryId,
     platingTypeId: ids.platingTypeId,

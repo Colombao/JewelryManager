@@ -6,9 +6,11 @@ export interface ImportProductRow {
   sku?: string;
   name: string;
   description?: string;
+  image?: string;
   supplierName?: string;
   categoryName?: string;
   platingTypeName?: string;
+  collectionName?: string;
   quantity?: number;
   weight?: string | number;
   unitPrice?: string | number;
@@ -21,6 +23,10 @@ export interface ImportProductRow {
   priceLevel3?: string | number;
   adjustedPrice?: string | number;
 }
+
+export type ImportProductInput = ImportProductRow & {
+  imageFile?: File;
+};
 
 const COLUMN_ALIASES: Record<string, keyof ImportProductRow | "skip"> = {
   cod: "code",
@@ -203,6 +209,50 @@ export const IMPORT_BATCH_SIZE = 50;
 export const IMPORT_ACCEPT =
   ".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv";
 
+export const IMPORT_FILE_ACCEPT = `${IMPORT_ACCEPT},.pdf,application/pdf`;
+
+async function uploadProductImage(apiUrl: string, file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const res = await fetch(`${apiUrl}/upload/product-image`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error || "Erro ao enviar imagem");
+  }
+
+  return data.url as string;
+}
+
+async function prepareItemsForImport(
+  apiUrl: string,
+  items: ImportProductInput[],
+  onImageProgress?: (done: number, total: number) => void
+): Promise<ImportProductRow[]> {
+  const withImages = items.filter((item) => item.imageFile);
+  const prepared: ImportProductRow[] = [];
+  let uploaded = 0;
+
+  for (const item of items) {
+    const { imageFile, ...rest } = item;
+    const next: ImportProductRow = { ...rest };
+
+    if (imageFile) {
+      next.image = await uploadProductImage(apiUrl, imageFile);
+      uploaded += 1;
+      onImageProgress?.(uploaded, withImages.length);
+    }
+
+    prepared.push(next);
+  }
+
+  return prepared;
+}
+
 export interface ImportBatchResult {
   created: number;
   skipped: number;
@@ -219,12 +269,18 @@ export function chunkArray<T>(items: T[], size: number): T[][] {
 
 export async function importProductsInBatches(
   apiUrl: string,
-  items: ImportProductRow[],
+  items: ImportProductInput[],
   skipDuplicates: boolean,
-  onProgress?: (processed: number, total: number) => void
+  onProgress?: (processed: number, total: number) => void,
+  onImageProgress?: (done: number, total: number) => void
 ): Promise<ImportBatchResult> {
-  const batches = chunkArray(items, IMPORT_BATCH_SIZE);
-  const total = items.length;
+  const preparedItems = await prepareItemsForImport(
+    apiUrl,
+    items,
+    onImageProgress
+  );
+  const batches = chunkArray(preparedItems, IMPORT_BATCH_SIZE);
+  const total = preparedItems.length;
   let processed = 0;
 
   const result: ImportBatchResult = { created: 0, skipped: 0, errors: [] };
