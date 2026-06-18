@@ -1,17 +1,27 @@
-# Frontend - Dashboard de Tendências de Semi Joias
+# Frontend — CRM de Semi Joias
 
-Next.js 15 + TypeScript + Tailwind CSS - Interface visual para análise inteligente de tendências do mercado de semi joias com dados em tempo real.
+Interface web em **Next.js 16**, **React 19**, **TypeScript** e **Tailwind CSS 4** para gestão de produtos, kits, fluxo comercial, tendências de mercado e portal da revendedora.
 
-## 🚀 Início Rápido
+## Início rápido
 
-### 1. Instalar Dependências
+### 1. Instalar dependências
 
 ```bash
 cd jewlery-app
 npm install
 ```
 
-### 2. Rodar Servidor de Desenvolvimento
+Requer **Node.js 20+** (ver `.nvmrc`).
+
+### 2. Variáveis de ambiente
+
+Crie `.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001
+```
+
+### 3. Desenvolvimento
 
 ```bash
 npm run dev
@@ -19,90 +29,144 @@ npm run dev
 
 Acesse [http://localhost:3000](http://localhost:3000)
 
-### 3. Build para Produção
+O backend deve estar rodando em `http://localhost:3001` (ver `jewlery-back/README_BACKEND.md`).
+
+### 4. Produção
 
 ```bash
 npm run build
 npm start
 ```
 
-## 📊 Componentes Principais
+## Páginas e rotas
 
-### MarketplaceTrends Component
-- **Visualização em tempo real** de produtos em tendência
-- **Cards interativos** com preço, vendas, crescimento e rating
-- **Score visual** calculado automaticamente
-- **Progress bar** de crescimento
-- **Estatísticas resumidas**: Total de produtos, crescimento médio, avaliação média
-- Dados integrados da API de web scraping
+| Rota | Descrição | Acesso |
+|------|-----------|--------|
+| `/` | Login do administrador | Público |
+| `/dashboard` | KPIs de estoque, kits e acertos | Admin |
+| `/fluxo` | Kanban do fluxo comercial (boards, cards, negócios) | Admin |
+| `/produtos` | Listagem e gestão de produtos | Admin |
+| `/cadastro` | Cadastro/edição de produtos e importação via planilha | Admin |
+| `/kit` | Montagem de kit comercial | Admin |
+| `/kits` | Kits montados e histórico | Admin |
+| `/usuarios` | Cadastro de revendedoras | Admin |
+| `/tendencias` | Tendências do Mercado Livre em tempo real | Admin |
+| `/analise` | Análise Google Trends | Admin |
+| `/configuracoes` | Categorias, banhos, fornecedores, margens e comissões | Admin |
+| `/revendedora/login` | Login da revendedora | Público |
+| `/revendedora` | Portal: negócios ativos, peças e acertos | Revendedora |
 
-### TrendsAnalysis Component
-- Análise Google Trends integrada
-- Comparação de palavras-chave
-- Insights preditivos
-- Visualização de tendências globais
+Rotas admin protegidas por `RequireAuth` (token JWT em `localStorage` via `AuthContext`).
 
-## 🎨 Páginas Disponíveis
+## Componentes principais
 
-```
-/dashboard          - Dashboard principal
-/tendencias         - Tendências em alta (MarketplaceTrends)
-/analise            - Análise Google Trends 
-/cadastro           - Registro de novos usuários
-/login              - Autenticação de usuários
-/usuarios           - Gerenciamento de usuários
-```
+| Componente | Função |
+|------------|--------|
+| `MainLayout` + `Sidebar` | Layout autenticado com navegação lateral |
+| `MarketplaceTrends` | Cards de produtos em alta do Mercado Livre |
+| `TrendsAnalysis` / `TrendsVisualization` | Gráficos e insights do Google Trends |
+| `BusinessKitPanel` | Painel de negócio: unidades vendidas, perdidas e acerto |
+| `DataTable` | Tabelas reutilizáveis com busca e ações |
+| `ResellerLayout` | Layout do portal da revendedora |
+| `RequireAuth` / `RequireResellerAuth` | Guards de rota |
 
-## 🔗 Integração com Backend
+## Integração com a API
 
-A aplicação se conecta aos endpoints do backend:
-
-```typescript
-// Em MarketplaceTrends.tsx
-const response = await fetch(
-  'http://localhost:3001/marketplace/trends-alta?limit=10'
-);
-const data = await response.json();
-```
-
-**Certifique-se que o backend está rodando em `http://localhost:3001`**
-
-## 🛠️ Stack Tecnológico
-
-- **Next.js 15**: Framework React com SSR
-- **TypeScript**: Type safety
-- **Tailwind CSS**: Estilização utilitária
-- **React Hooks**: State management
-- **next/image**: Otimização de imagens
-- **Axios/Fetch**: Requisições HTTP
-
-## 📦 Configuração de Imagens Externas
-
-O projeto está configurado para carregar imagens do Mercado Livre:
+A URL base vem de `lib/api.ts`:
 
 ```typescript
-// next.config.ts
-remotePatterns: [
-  { protocol: "https", hostname: "http2.mlstatic.com" },
-  { protocol: "https", hostname: "images.unsplash.com" }
-]
+export const apiUrl =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 ```
 
-## 🚀 Deploy
+Exemplos de endpoints consumidos:
 
-### Vercel (Recomendado)
+- `POST /auth/login` — login admin
+- `GET /dashboard/stats` — dashboard
+- `GET /products`, `POST /products`, `POST /products/import` — produtos
+- `GET /kits`, `POST /kits` — kits
+- `GET /flow/board`, `POST /flow/business` — fluxo Kanban
+- `GET /marketplace/trends-alta` — tendências ML
+- `GET /trends/analysis` — Google Trends
+- `POST /reseller-portal/login` — portal revendedora
 
-```bash
-npm i -g vercel
-vercel
+## Bibliotecas auxiliares (`lib/`)
+
+- `api.ts` — URL da API
+- `pricing.ts` — margens, comissões e formatação de preços
+- `business.ts` — tipos do fluxo comercial
+- `settlement.ts` — acertos, pagamentos e status
+
+## Importação de produtos
+
+A página `/cadastro` aceita planilhas (`.xlsx`, `.xls`, `.csv`) via biblioteca **xlsx**, com parsing em `cadastro/productImport.ts` e envio em lotes para `POST /products/import`.
+
+## Upload de imagens
+
+Imagens de produto são enviadas para `POST /upload/product-image` e exibidas a partir de `/uploads/products/...` no backend. O `next.config.ts` permite carregar imagens do Mercado Livre (`*.mlstatic.com`) e do servidor da API.
+
+## Stack tecnológica
+
+| Tecnologia | Uso |
+|------------|-----|
+| Next.js 16 | App Router, SSR/CSR |
+| React 19 | UI |
+| TypeScript | Tipagem |
+| Tailwind CSS 4 | Estilização |
+| react-hot-toast | Notificações |
+| sweetalert2 | Diálogos de confirmação |
+| react-select | Seletores avançados |
+| react-icons | Ícones |
+| xlsx | Importação de planilhas |
+
+## Fluxo de dados — tendências
+
+```
+Browser
+  → MarketplaceTrends.tsx
+  → GET /marketplace/trends-alta
+  → marketplace.provider.js (scraping)
+  → Mercado Livre
+  → cache → JSON → dashboard
 ```
 
-Ou conecte diretamente um repositório GitHub à Vercel.
+## Estrutura do projeto
 
-### Docker
+```
+jewlery-app/
+├── app/
+│   ├── components/       # UI compartilhada
+│   ├── contexts/         # AuthContext
+│   ├── hooks/            # useAuthSession
+│   ├── cadastro/         # productImport.ts
+│   ├── kit/              # kitUtils.ts
+│   └── [páginas]/        # Uma pasta por rota
+├── lib/                  # Utilitários e tipos
+├── public/
+└── next.config.ts
+```
+
+## Recursos implementados
+
+- Autenticação admin (JWT) e portal da revendedora
+- Dashboard com indicadores de estoque, kits e acertos
+- CRUD de produtos com importação em lote e upload de imagem
+- Montagem e listagem de kits comerciais
+- Fluxo Kanban com acompanhamento peça a peça e acerto financeiro
+- Gestão de revendedoras e configurações comerciais
+- Tendências do Mercado Livre e análise Google Trends
+- Interface responsiva com sidebar mobile
+
+## Deploy
+
+### Vercel (recomendado)
+
+Configure `NEXT_PUBLIC_API_URL` apontando para a API em produção e faça deploy do diretório `jewlery-app`.
+
+### Docker (exemplo)
 
 ```dockerfile
-FROM node:18-alpine
+FROM node:20-alpine
 WORKDIR /app
 COPY . .
 RUN npm install && npm run build
@@ -110,49 +174,9 @@ EXPOSE 3000
 CMD ["npm", "start"]
 ```
 
-## 🔄 Fluxo de Dados
+## Próximos passos (roadmap)
 
-```
-Browser (Frontend)
-    ↓
-MarketplaceTrends.tsx (fetch)
-    ↓
-http://localhost:3001/marketplace/trends-alta
-    ↓
-Backend API (marketplace.provider.js)
-    ↓
-Puppeteer + Cheerio (Web Scraping)
-    ↓
-Mercado Livre (Source)
-    ↓
-Dados REAIS → Cache → JSON Response → Dashboard
-```
-
-## 📝 Variáveis de Ambiente
-
-Crie `.env.local`:
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:3001
-NEXT_PUBLIC_APP_NAME=JewelTrends
-NEXT_PUBLIC_APP_VERSION=1.0.0
-```
-
-## ✅ Recursos Implementados
-
-✅ Exibição de tendências em tempo real  
-✅ Integração com dados reais do Mercado Livre  
-✅ Scores automáticos de viabilidade  
-✅ Visualização responsiva  
-✅ Cache de dados  
-✅ Imagens otimizadas  
-✅ Interface moderna com Tailwind CSS  
-
-## 📈 Próximas Funcionalidades
-
-- [ ] Autenticação completa de usuários
-- [ ] Dashboard customizável
-- [ ] Exportação de relatórios em PDF
-- [ ] Gráficos de histórico de preços
-- [ ] Notificações de oportunidades
-- [ ] App Mobile (React Native)
+- [ ] Exportação de relatórios (PDF/Excel)
+- [ ] Gráficos históricos de preços e tendências
+- [ ] Testes E2E
+- [ ] App mobile

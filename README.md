@@ -1,12 +1,69 @@
 # CRM para Semi Joias com Motor de Recomendação Baseado em Tendências de Mercado
+
 **Autor:** João Vitor Colombo  
 **Curso:** Engenharia de Software  
-**Data:** Dezembro/2025  
+**Data:** Junho/2026  
 
 ---
 
 ## Resumo
-Este projeto apresenta o desenvolvimento de um CRM especializado para o setor de semi joias, integrado a um módulo inteligente de recomendação responsável por analisar tendências do mercado e gerar kits otimizados para venda. A solução utiliza Next.js, Node.js, Express e MySQL para entregar uma aplicação web moderna, escalável e orientada à eficiência comercial. Este documento aborda o propósito do projeto, sua justificativa, arquitetura, requisitos e diretrizes técnicas.
+
+Este projeto apresenta o desenvolvimento de um CRM especializado para o setor de semi joias, integrado a um módulo inteligente de recomendação que analisa tendências do mercado e apoia a montagem de kits comerciais. A solução utiliza **Next.js 16**, **Node.js/Express 5**, **Prisma** e **MySQL** para entregar uma aplicação web moderna, com gestão de estoque, fluxo comercial em Kanban, portal da revendedora e integração com dados reais do Mercado Livre e Google Trends.
+
+**Documentação técnica detalhada:**
+
+- [Frontend (`jewlery-app/README.md`)](./jewlery-app/README.md)
+- [Backend (`jewlery-back/README_BACKEND.md`)](./jewlery-back/README_BACKEND.md)
+
+---
+
+## Como executar o projeto
+
+### Pré-requisitos
+
+- Node.js 20+
+- Docker (opcional, para MySQL)
+- npm
+
+### 1. Banco de dados
+
+```bash
+docker compose up -d
+```
+
+### 2. Backend
+
+```bash
+cd jewlery-back
+npm install
+npx prisma generate
+npx prisma migrate dev
+npm run seed:auth      # usuário demo: demo@demo / demo
+npm run dev
+```
+
+API em `http://localhost:3001` — variáveis em `jewlery-back/.env` (ver README do backend).
+
+### 3. Frontend
+
+```bash
+cd jewlery-app
+# Crie .env.local com NEXT_PUBLIC_API_URL=http://localhost:3001
+npm install
+npm run dev
+```
+
+Aplicação em `http://localhost:3000`
+
+### Estrutura do monorepo
+
+```
+jew/
+├── jewlery-app/          # Frontend Next.js
+├── jewlery-back/         # API Express + Prisma
+├── docker-compose.yml    # MySQL local
+└── README.md             # Este documento
+```
 
 ---
 
@@ -31,12 +88,18 @@ A proposta preenche uma lacuna existente: CRMs especializados com recomendaçõe
 Desenvolver um CRM para gestão de semi joias integrado a um módulo de recomendação baseado em tendências do mercado.
 
 ### Objetivos Específicos
-- Criar módulo de cadastro e gerenciamento de produtos  
-- Implementar dashboard com indicadores e relatórios  
-- Desenvolver API REST em Node.js/Express  
-- Integrar coleta de tendências de mercado via APIs externas ou datasets  
-- Criar motor de recomendação capaz de montar kits automaticamente  
-- Implementar mecanismos de segurança e conformidade com LGPD  
+
+| Objetivo | Status |
+|----------|--------|
+| Cadastro e gerenciamento de produtos (incl. importação em lote) | Implementado |
+| Dashboard com indicadores operacionais | Implementado |
+| API REST em Node.js/Express com Prisma | Implementado |
+| Coleta de tendências via Mercado Livre e Google Trends | Implementado |
+| Motor de sugestão de kits (`/marketplace/kit-suggestions`) | Implementado |
+| Fluxo comercial Kanban com acerto financeiro | Implementado |
+| Portal da revendedora | Implementado |
+| Autenticação JWT (admin e revendedora) | Implementado |
+| Exportação de relatórios em PDF | Pendente |
 
 ---
 
@@ -49,7 +112,8 @@ Aplicações Web (Web Apps).
 Sistema CRM especializado em semi joias, com funcionalidades de gestão e motor inteligente de recomendação baseado em tendências.
 
 ## Propósito e Uso Prático
-O projeto visa resolver dificuldades enfrentadas por lojistas na organização de produtos, composição de kits comerciais e análise de tendências. O sistema oferecerá relatórios, indicadores e recomendações automáticas, facilitando a tomada de decisão.
+
+O sistema organiza produtos e estoque, monta kits comerciais, acompanha o ciclo de consignação em um fluxo Kanban, calcula comissões e acertos financeiros, e oferece tendências de mercado para apoiar decisões de compra e montagem de kits.
 
 ## Público-Alvo
 - Lojistas de semi joias  
@@ -58,16 +122,18 @@ O projeto visa resolver dificuldades enfrentadas por lojistas na organização d
 - Curadores de kits de moda  
 
 ## Problemas a Resolver
-- Falta de automação na montagem de kits  
-- Ausência de ferramentas que intCRMretem tendências do mercado  
-- Gestão de produtos desorganizada  
-- Baixa eficiência nas análises visuais e gerenciais  
+
+- Falta de automação na montagem e acompanhamento de kits  
+- Ausência de ferramentas que interpretem tendências do mercado  
+- Gestão de produtos e acertos com revendedoras desorganizada  
+- Baixa visibilidade operacional (estoque, kits no fluxo, pendências)
 
 ## Diferenciação / Ineditismo
-- CRM completamente focado no nicho de semi joias  
-- Módulo de recomendação baseado em tendências  
-- Composição automática de kits comerciais  
-- Abordagem orientada a dados e otimização de vendas  
+
+- CRM focado no nicho de semi joias e modelo de revenda/consignação  
+- Módulo de recomendação baseado em tendências reais (Mercado Livre + Google Trends)  
+- Fluxo Kanban com controle peça a peça e acerto financeiro  
+- Portal self-service para revendedoras
 
 ## Limitações
 O projeto não contemplará:
@@ -95,12 +161,15 @@ O projeto não contemplará:
 ## 3.1. Requisitos de Software
 
 ### Requisitos Funcionais (RF)
-- RF01 – Permitir cadastro, edição e exclusão de produtos  
-- RF02 – Listar e consultar produtos cadastrados  
-- RF03 – Gerar kits recomendados automaticamente  
-- RF04 – Exibir dashboard com indicadores e relatórios  
-- RF05 – Autenticação de usuários  
-- RF06 – Exportação de relatórios  
+
+| ID | Requisito | Status |
+|----|-----------|--------|
+| RF01 | CRUD de produtos com importação e imagem | OK |
+| RF02 | Listagem e consulta de produtos | OK |
+| RF03 | Sugestão e montagem de kits | OK |
+| RF04 | Dashboard com KPIs | OK |
+| RF05 | Autenticação (admin e revendedora) | OK |
+| RF06 | Exportação de relatórios | Pendente |
 
 ### Requisitos Não-Funcionais (RNF)
 - RNF01 – Tempo de resposta inferior a 300ms por requisição  
@@ -113,21 +182,30 @@ O projeto não contemplará:
 (Pode ser incluído posteriormente o diagrama UML on-demand.)
 
 ### Aderência à Linha de Projeto
-- Front-end em Next.js  
-- Backend em Node.js/Express (API REST)  
-- Integração com MySQL  
-- Dashboard analítico  
-- Autenticação e requisições assíncronas  
+
+- Front-end em Next.js 16 + React 19 + TypeScript  
+- Backend em Node.js/Express 5 (API REST modular)  
+- Prisma ORM + MySQL  
+- Dashboard analítico com KPIs reais  
+- Autenticação JWT e portal da revendedora  
+- Scraping Mercado Livre e Google Trends
 
 ---
 
 ## 3.2. Considerações de Design
 
 ### Visão Inicial da Arquitetura
-- Interface desenvolvida com Next.js  
-- API CRM construída com Node.js/Express  
-- Banco de dados MySQL  
-- Módulo de recomendação integrado à API  
+
+```
+Usuário Admin ──► Next.js (jewlery-app) ──► Express API ──► MySQL
+Revendedora   ──► /revendedora           ──► /reseller-portal
+API           ──► Mercado Livre (scraping) + Google Trends
+```
+
+- Interface: Next.js 16 (App Router)  
+- API: Express 5 com módulos por domínio  
+- Banco: MySQL via Prisma  
+- Recomendação: marketplace scraping + kit-suggestions + job cron de tendências
 
 ### Padrões de Arquitetura
 - Arquitetura em camadas  
@@ -166,72 +244,50 @@ O sistema CRM para Semi Joias é uma aplicação web que permite:
 
 ### Containers Principais
 
-1. **Frontend (Next.js)**
-   - Interface web responsiva.
-   - Renderiza views e dashboards.
-   - Envia requisições para a API via HTTP/HTTPS.
+1. **Frontend (Next.js 16)**
+   - Interface admin (dashboard, produtos, kits, fluxo, tendências)
+   - Portal da revendedora (`/revendedora`)
+   - Requisições HTTP para a API
 
-2. **API CRM (Node.js / Express)**
-   - Contém toda a lógica de negócio.
-   - Realiza CRUD de produtos.
-   - Processa dados da API externa.
-   - Gera kits recomendados.
-   - Autentica usuários.
+2. **API CRM (Node.js / Express 5)**
+   - Módulos: products, kits, flow, marketplace, trends, resellers, dashboard
+   - Configurações: categories, platings, suppliers, collections, margens, comissões
+   - Upload de imagens e acertos financeiros
 
-3. **Banco de Dados (MySQL)**
-   - Armazena produtos, categorias, kits, tendências processadas, usuários.
+3. **Banco de Dados (MySQL + Prisma)**
+   - Produtos, kits, revendedoras, fluxo Kanban, tendências, acertos
 
-4. **API Externa de Tendências**
-   - Fornece dados sobre tendências de mercado.
+4. **Fontes Externas**
+   - Mercado Livre (Puppeteer/Cheerio) e Google Trends API
   
 ## C4 – Nível 3: Componentes do Container "API CRM"
 
- 1. AuthController
-- Login, logout, renovação de token JWT.
-- Middleware de segurança.
-
- 2. ProductController
-- CRUD de produtos.
-- Validação de dados.
-- Busca paginada.
-
- 3. KitRecommendationService
-- Consulta tendências.
-- Combina produtos em kits.
-- Aplica regras de recomendação.
-- Salva kits gerados.
-
- 4. TrendIntegrationService
-- Conecta à API externa.
-- Converte dados brutos.
-- Padroniza formato interno.
-
- 5. DashboardController
-- KPIs (estoque, kits, produtos quentes).
-- Histórico de tendências.
-- Indicadores de vendas (fase futura).
-
- 6. Database Layer (Repository Pattern)
-- Conexão MySQL.
-- Consultas via MySQL2.
-- Sanitização e segurança.
-
- 7. Middlewares
-- Autenticação JWT
-- Tratamento de erros
-- Rate limiting (opcional)
+| Componente | Responsabilidade |
+|------------|------------------|
+| Auth (`/auth`, `/reseller-portal`) | Login JWT admin e revendedora |
+| ProductsController | CRUD, importação em lote, estoque e preços |
+| KitsService | Montagem, totais, comissão e acerto |
+| FlowController | Kanban: boards, cards, negócios por unidade |
+| MarketplaceProvider | Scraping ML, compare, kit-suggestions |
+| TrendsService + Job | Google Trends e persistência periódica |
+| DashboardService | KPIs de estoque, kits e acertos |
+| Repositories (Prisma) | Acesso ao MySQL |
+| Middlewares | CORS, auth, upload Multer |
  
 <img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/fc937cd7-9a69-48fc-b552-3eb3d484c0a8" />
 
 
 ### Fluxo
 
-Usuário → Frontend Next.js → API Node.js → Banco MySQL  
-API Node.js → API Externa de Tendências → Recomenda kits → Retorna ao frontend
+```
+Usuário → Frontend Next.js → API Express → MySQL
+API → Mercado Livre / Google Trends → kit-suggestions → Montagem de kit
+Revendedora → Portal → Acerto e pagamentos
+```
 
+### Telas implementadas
 
-### Mockups das Telas Principais
-A serem desenvolvidos usando Figma ou ferramenta equivalente.
+Dashboard, fluxo Kanban, produtos, cadastro (com importação), montagem de kits, kits montados, revendedoras, tendências, análise Google Trends, configurações e portal da revendedora.
 
 ### Decisões e Alternativas Consideradas
 - Next.js escolhido pelo suporte a SSR e ótima performance  
@@ -253,9 +309,10 @@ A serem desenvolvidos usando Figma ou ferramenta equivalente.
 - JavaScript / TypeScript  
 
 ### Frameworks e Bibliotecas
-- Next.js  
-- Node.js / Express  
-- MySQL2  
+
+- **Frontend:** Next.js 16, React 19, Tailwind CSS 4, xlsx, react-hot-toast  
+- **Backend:** Express 5, Prisma 5, Puppeteer, Cheerio, google-trends-api, Multer, node-cron  
+- **Banco:** MySQL 8 via Prisma Client
 
 ### Ferramentas de Desenvolvimento e Gestão
 - VSCode  
@@ -304,18 +361,24 @@ Embora o projeto utilize tendências de mercado, não faz uso de dados sensívei
 
 ---
 
-# 4. Próximos Passos
+# 4. Estado atual e próximos passos
 
-### Portfólio I
-- Finalização da modelagem do banco  
-- Desenvolvimento da API base  
-- Implementação das telas iniciais do sistema  
+### Entregue
 
-### Portfólio II
-- Implementação completa do módulo de recomendação  
-- Construção do dashboard analítico  
-- Testes manuais e automatizados  
-- Documentação final  
+- Modelagem completa do banco (Prisma + migrations)  
+- API REST com módulos de produtos, kits, fluxo, marketplace, tendências e revendedoras  
+- Frontend com 12+ telas funcionais  
+- Scraping Mercado Livre e análise Google Trends  
+- Fluxo Kanban com acerto financeiro e portal da revendedora  
+- Job agendado de atualização de tendências (a cada 6 horas)
+
+### Em evolução
+
+- Proteção JWT em todas as rotas sensíveis da API  
+- Testes automatizados (Jest / Playwright)  
+- Exportação de relatórios (PDF/Excel)  
+- Novas fontes de marketplace  
+- Documentação OpenAPI/Swagger
 
 ---
 
@@ -338,10 +401,11 @@ Embora o projeto utilize tendências de mercado, não faz uso de dados sensívei
 - W3C. *WCAG 2.1 – Web Content Accessibility Guidelines*.
 
 **Documentação Técnica (tecnologias utilizadas)**
+
 - Next.js Documentation – https://nextjs.org/docs  
-- Node.js Documentation – https://nodejs.org/en/docs  
 - Express.js Documentation – https://expressjs.com  
-- MySQL Documentation – https://dev.mysql.com/doc/  
+- Prisma Documentation – https://www.prisma.io/docs  
+- MySQL Documentation – https://dev.mysql.com/doc/
 
 **Produtos de Mercado (Soluções Correlatas)**
 - Bling CRM – https://www.bling.com.br  
