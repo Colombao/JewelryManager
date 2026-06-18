@@ -9,6 +9,7 @@ import {
   enrichTrendsWithStock,
   inferCategoriesFromTrendName,
 } from "./marketplace.matching.js";
+import { isChromeAvailableForScraping } from "./marketplace.scraper.js";
 
 puppeteer.use(StealthPlugin());
 
@@ -17,6 +18,14 @@ let cacheMarketplace = {
   timestamp: null,
   CACHE_DURATION: 10 * 60 * 1000,
 };
+
+export function clearMarketplaceCache() {
+  cacheMarketplace = {
+    ...cacheMarketplace,
+    data: null,
+    timestamp: null,
+  };
+}
 
 const SEARCH_TERMS = [
   "semi joia",
@@ -27,7 +36,11 @@ const SEARCH_TERMS = [
 ];
 
 function formatSearchUrl(term) {
-  return term.toLowerCase().replace(/\s+/g, "-");
+  return term
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "-");
 }
 
 function parsePrice(priceText) {
@@ -110,7 +123,7 @@ async function fetchFromMercadoLivreApi() {
           Accept: "application/json",
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-          Referer: "https://www.mercadolivre.com.br/",
+          Referer: "https://lista.mercadolivre.com.br/",
         },
         signal: AbortSignal.timeout(15000),
       });
@@ -233,7 +246,7 @@ async function fetchFromMercadoLivreFetch() {
           Accept:
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
           "Accept-Language": "pt-BR,pt;q=0.9",
-          Referer: "https://www.google.com/",
+          Referer: "https://lista.mercadolivre.com.br/",
         },
         signal: AbortSignal.timeout(20000),
       });
@@ -295,8 +308,17 @@ async function fetchFromMercadoLivrePuppeteer() {
 
   try {
     const executablePath = resolveChromeExecutable();
+    const headless =
+      process.env.MARKETPLACE_HEADLESS === "true"
+        ? true
+        : process.env.MARKETPLACE_HEADLESS === "false"
+          ? false
+          : process.platform === "win32" && process.env.NODE_ENV !== "production"
+            ? false
+            : true;
+
     const launchOptions = {
-      headless: true,
+      headless,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -304,6 +326,10 @@ async function fetchFromMercadoLivrePuppeteer() {
         "--disable-blink-features=AutomationControlled",
       ],
     };
+
+    if (!headless && process.platform === "win32") {
+      launchOptions.args.push("--window-position=-32000,-32000", "--window-size=1366,900");
+    }
 
     if (executablePath) {
       launchOptions.executablePath = executablePath;
@@ -373,38 +399,42 @@ async function fetchFromMercadoLivrePuppeteer() {
   }
 }
 
-async function fetchFromMercadoLivre() {
-  if (
-    cacheMarketplace.data &&
-    Date.now() - cacheMarketplace.timestamp < cacheMarketplace.CACHE_DURATION
-  ) {
-    console.log("✅ Usando cache de tendências (10 min)...");
-    return cacheMarketplace.data;
+function hasRealMercadoLivreData(products) {
+  return (
+    Array.isArray(products) &&
+    products.some(
+      (trend) => trend.marketplace === "mercado-livre" && trend.imagem
+    )
+  );
+}
+
+async function fetchFromMercadoLivre(limit = 10) {
+  if (cacheMarketplace.data && Date.now() - cacheMarketplace.timestamp < cacheMarketplace.CACHE_DURATION) {
+    if (hasRealMercadoLivreData(cacheMarketplace.data.products)) {
+      console.log("✅ Usando cache de tendências do Mercado Livre (10 min)...");
+      return cacheMarketplace.data;
+    }
+    console.log("↪ Cache sem dados reais do ML — buscando novamente...");
+    clearMarketplaceCache();
   }
 
-  console.log("🔍 Montando tendências com anúncios do Mercado Livre + estoque...");
-  const hybridTrends = await buildHybridTrends(50);
+  console.log("🔍 Buscando anúncios reais no Mercado Livre...");
+  const hybridTrends = await buildHybridTrends(limit);
 
-  if (hybridTrends.length > 0) {
-    const hasMercadoLivre = hybridTrends.some(
-      (trend) => trend.marketplace === "mercado-livre" && trend.imagem
-    );
-
+  if (hasRealMercadoLivreData(hybridTrends)) {
     cacheMarketplace = {
       data: {
         products: hybridTrends,
-        fonte: hasMercadoLivre
-          ? "Mercado Livre (anúncios reais) + estoque cadastrado"
-          : "Análise do estoque + keywords de mercado",
+        fonte: "Mercado Livre (anúncios reais)",
       },
       timestamp: Date.now(),
     };
 
-    console.log(`✅ ${hybridTrends.length} tendências híbridas geradas`);
+    console.log(`✅ ${hybridTrends.length} anúncios reais do Mercado Livre`);
     return cacheMarketplace.data;
   }
 
-  console.log("🔍 Buscando tendências em lote no Mercado Livre...");
+  console.log("↪ Scraping por termo falhou, tentando lote alternativo...");
 
   let products = await fetchFromMercadoLivreApi();
   let fonte = "API Mercado Livre";
@@ -416,7 +446,9 @@ async function fetchFromMercadoLivre() {
   }
 
   const shouldTryPuppeteer =
-    products.length === 0 && process.env.MARKETPLACE_USE_PUPPETEER === "true";
+    products.length === 0 &&
+    (process.env.MARKETPLACE_USE_PUPPETEER === "true" ||
+      isChromeAvailableForScraping());
 
   if (shouldTryPuppeteer) {
     console.log("↪ Tentando Puppeteer...");
@@ -435,7 +467,18 @@ async function fetchFromMercadoLivre() {
     };
   }
 
-  const sorted = products
+  const mlProducts = products.filter(
+    (item) => item.marketplace === "mercado-livre" && item.imagem
+  );
+
+  if (mlProducts.length === 0) {
+    return {
+      products: [],
+      fonte: "Mercado Livre indisponível",
+    };
+  }
+
+  const sorted = mlProducts
     .sort((a, b) => {
       if (b.crescimento !== a.crescimento) return b.crescimento - a.crescimento;
       if (b.vendidos !== a.vendidos) return b.vendidos - a.vendidos;
@@ -452,11 +495,17 @@ async function fetchFromMercadoLivre() {
   return cacheMarketplace.data;
 }
 
-export async function getMarketplaceTrends(limit = 10) {
-  const { products, fonte } = await fetchFromMercadoLivre();
+export async function getMarketplaceTrends(limit = 10, options = {}) {
+  if (options.refresh) {
+    clearMarketplaceCache();
+  }
+
+  const { products, fonte } = await fetchFromMercadoLivre(limit);
 
   if (!products || products.length === 0) {
-    throw new Error("Nenhuma tendência disponível no momento");
+    throw new Error(
+      "Não foi possível carregar anúncios do Mercado Livre. Reinicie o backend e tente novamente em alguns minutos."
+    );
   }
 
   const mapped = products.map((trend, index) => mapRawTrend(trend, index));

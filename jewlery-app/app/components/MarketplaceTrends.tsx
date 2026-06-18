@@ -46,11 +46,32 @@ interface MarketplaceData {
 function getMarketplaceIcon(marketplace: string): string {
   const icons: Record<string, string> = {
     "mercado-livre": "Mercado Livre",
-    "estoque-analisado": "Seu estoque",
+    "estoque-analisado": "Tendência de mercado",
     amazon: "Amazon",
     facebook: "Facebook Marketplace",
   };
   return icons[marketplace] || marketplace;
+}
+
+const CATEGORY_PLACEHOLDERS: Array<{
+  match: RegExp;
+  emoji: string;
+  gradient: string;
+}> = [
+  { match: /brinco/i, emoji: "✨", gradient: "from-amber-400 to-orange-500" },
+  { match: /anel/i, emoji: "💍", gradient: "from-purple-500 to-pink-500" },
+  { match: /colar|corrente|pingente/i, emoji: "📿", gradient: "from-rose-400 to-red-500" },
+  { match: /pulseira/i, emoji: "⌚", gradient: "from-yellow-400 to-amber-500" },
+  { match: /tornozeleira/i, emoji: "🦶", gradient: "from-teal-400 to-cyan-500" },
+  { match: /berloque/i, emoji: "🔮", gradient: "from-indigo-400 to-violet-500" },
+  { match: /conjunto|mix/i, emoji: "🎁", gradient: "from-fuchsia-400 to-purple-500" },
+];
+
+function getCategoryPlaceholder(categoria: string) {
+  const found = CATEGORY_PLACEHOLDERS.find((item) =>
+    item.match.test(categoria)
+  );
+  return found || { emoji: "💎", gradient: "from-slate-500 to-slate-700" };
 }
 
 function getCrescimentoColor(crescimento: number): string {
@@ -73,12 +94,15 @@ function ProductThumbnail({
   image,
   alt,
   sizeClass = "w-20 h-20",
+  category,
 }: {
   image: string | null;
   alt: string;
   sizeClass?: string;
+  category?: string;
 }) {
   const imageUrl = image?.startsWith("http") ? image : resolveImageUrl(image);
+  const placeholder = getCategoryPlaceholder(category || alt);
 
   return (
     <div
@@ -93,7 +117,13 @@ function ProductThumbnail({
           referrerPolicy="no-referrer"
         />
       ) : (
-        <span className="text-[10px] text-slate-400 text-center px-1">Sem foto</span>
+        <div
+          className={`h-full w-full bg-gradient-to-br ${placeholder.gradient} flex items-center justify-center`}
+        >
+          <span className="text-2xl" aria-hidden>
+            {placeholder.emoji}
+          </span>
+        </div>
       )}
     </div>
   );
@@ -106,13 +136,28 @@ export default function MarketplaceTrends() {
     null
   );
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  const fetchTrends = useCallback(async () => {
+  const fetchTrends = useCallback(async (options?: { refresh?: boolean }) => {
+    const isRefresh = Boolean(options?.refresh && hasLoaded);
+
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      const params = new URLSearchParams({ limit: "10" });
+      if (!hasLoaded || options?.refresh) {
+        params.set("refresh", "1");
+      }
+
       const response = await fetch(
-        `${apiUrl}/marketplace/trends-alta?limit=10`
+        `${apiUrl}/marketplace/trends-alta?${params.toString()}`,
+        { cache: "no-store" }
       );
       const data: MarketplaceData & { error?: string } = await response.json();
 
@@ -120,16 +165,30 @@ export default function MarketplaceTrends() {
         throw new Error(data.error || "Erro ao buscar tendências");
       }
 
+      const hasMercadoLivreData = (data.topTrends || []).some(
+        (trend) => trend.marketplace === "mercado-livre" && trend.imagem
+      );
+
+      if ((data.topTrends?.length ?? 0) > 0 && !hasMercadoLivreData) {
+        throw new Error(
+          "O backend retornou dados antigos (sem fotos do Mercado Livre). Pare o processo na porta 3001, rode npm run dev em jewlery-back e clique em Atualizar."
+        );
+      }
+
       setTrends(data.topTrends || []);
       setMeta({ fonte: data.fonte, timestamp: data.timestamp });
       setError(null);
+      setHasLoaded(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro desconhecido");
-      setTrends([]);
+      if (!hasLoaded) {
+        setError(err instanceof Error ? err.message : "Erro desconhecido");
+        setTrends([]);
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [hasLoaded]);
 
   useEffect(() => {
     fetchTrends();
@@ -172,7 +231,7 @@ export default function MarketplaceTrends() {
     router.push("/kit");
   }
 
-  if (loading) {
+  if (loading && !hasLoaded) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
         <div className="text-center">
@@ -181,7 +240,8 @@ export default function MarketplaceTrends() {
             Buscando anúncios reais no Mercado Livre...
           </div>
           <p className="text-sm text-gray-500 mt-2">
-            Isso pode levar até 1 minuto na primeira carga.
+            Extraindo fotos, preços e vendidos dos top anúncios. Isso pode levar
+            até 2 minutos na primeira carga.
           </p>
         </div>
       </div>
@@ -196,7 +256,7 @@ export default function MarketplaceTrends() {
           <div className="text-2xl font-bold text-red-600 mb-4">{error}</div>
           <button
             type="button"
-            onClick={fetchTrends}
+            onClick={() => fetchTrends()}
             className="px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700"
           >
             Tentar novamente
@@ -206,9 +266,11 @@ export default function MarketplaceTrends() {
     );
   }
 
+  const isMercadoLivreUnavailable = meta?.fonte?.includes("indisponível");
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
+      <div className={`max-w-7xl mx-auto transition-opacity ${refreshing ? "opacity-70" : ""}`}>
         <div className="text-center mb-6 sm:mb-8">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 sm:mb-4">
             Tendências em Alta
@@ -223,13 +285,20 @@ export default function MarketplaceTrends() {
               {new Date(meta.timestamp).toLocaleString("pt-BR")}
             </p>
           )}
+          {isMercadoLivreUnavailable && (
+            <p className="text-sm text-amber-300 mt-2 max-w-2xl mx-auto px-2">
+              Não foi possível conectar ao Mercado Livre agora. Clique em
+              Atualizar para tentar de novo.
+            </p>
+          )}
           <div className="mt-4 flex flex-wrap justify-center gap-2 sm:gap-3">
             <button
               type="button"
-              onClick={fetchTrends}
-              className="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:border-purple-400"
+              onClick={() => fetchTrends({ refresh: true })}
+              disabled={refreshing}
+              className="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:border-purple-400 disabled:opacity-60 disabled:cursor-wait"
             >
-              Atualizar
+              {refreshing ? "Atualizando..." : "Atualizar"}
             </button>
             <Link
               href="/kit"
@@ -270,6 +339,7 @@ export default function MarketplaceTrends() {
                         <ProductThumbnail
                           image={getTrendDisplayImage(trend)}
                           alt={trend.nome}
+                          category={trend.categoria}
                           sizeClass="w-20 h-20"
                         />
                       </a>
@@ -277,6 +347,7 @@ export default function MarketplaceTrends() {
                       <ProductThumbnail
                         image={getTrendDisplayImage(trend)}
                         alt={trend.nome}
+                        category={trend.categoria}
                         sizeClass="w-20 h-20"
                       />
                     )}
@@ -294,6 +365,9 @@ export default function MarketplaceTrends() {
                       <div className="text-sm text-slate-400 mb-3">
                         {getMarketplaceIcon(trend.marketplace)}
                         {trend.categoria ? ` · ${trend.categoria}` : ""}
+                        {trend.marketplace === "mercado-livre" && trend.itemId
+                          ? ` · ${trend.itemId}`
+                          : ""}
                       </div>
 
                       {getMercadoLivreLink(trend) && (
@@ -307,17 +381,23 @@ export default function MarketplaceTrends() {
                         </a>
                       )}
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
                         <div>
                           <div className="text-slate-400 mb-1">Demanda</div>
                           <div className="text-lg font-bold text-green-400">
-                            {trend.vendidos.toLocaleString()}
+                            {trend.vendidos.toLocaleString("pt-BR")}
                           </div>
                         </div>
                         <div>
                           <div className="text-slate-400 mb-1">Preço ref.</div>
                           <div className="text-lg font-bold text-white">
                             R$ {trend.preco.toFixed(2)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400 mb-1">Avaliação</div>
+                          <div className="text-lg font-bold text-yellow-400">
+                            ★ {trend.rating.toFixed(1)}
                           </div>
                         </div>
                         <div>
@@ -345,7 +425,7 @@ export default function MarketplaceTrends() {
                       className={`rounded-lg p-3 border ${
                         hasStock
                           ? "border-green-500/40 bg-green-500/10"
-                          : "border-orange-500/40 bg-orange-500/10"
+                          : "border-slate-500/40 bg-slate-500/10"
                       }`}
                     >
                       <p className="text-xs uppercase tracking-wide text-slate-300 mb-1">
@@ -354,8 +434,13 @@ export default function MarketplaceTrends() {
                       <p className="text-lg font-bold text-white">
                         {hasStock
                           ? `${trend.estoqueDisponivel} produto(s) compatível(is)`
-                          : "Sem match no estoque"}
+                          : "Nenhum produto compatível ainda"}
                       </p>
+                      {!hasStock && (
+                        <p className="text-xs text-slate-400 mt-1">
+                          Cadastre itens em {trend.categoria} para cruzar com esta tendência.
+                        </p>
+                      )}
                     </div>
 
                     <button

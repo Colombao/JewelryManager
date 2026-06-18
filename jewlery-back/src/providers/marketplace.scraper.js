@@ -6,7 +6,11 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 puppeteer.use(StealthPlugin());
 
 export function formatSearchUrl(term) {
-  return term.toLowerCase().replace(/\s+/g, "-");
+  return term
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "-");
 }
 
 export function buildSearchPageUrl(term) {
@@ -59,6 +63,15 @@ function shouldUseSparticuzChromium() {
   return process.platform === "linux" && process.env.NODE_ENV === "production";
 }
 
+function resolveHeadlessMode() {
+  if (process.env.MARKETPLACE_HEADLESS === "true") return true;
+  if (process.env.MARKETPLACE_HEADLESS === "false") return false;
+  if (process.platform === "win32" && process.env.NODE_ENV !== "production") {
+    return false;
+  }
+  return true;
+}
+
 async function resolveLaunchOptions() {
   if (shouldUseSparticuzChromium()) {
     const chromium = (await import("@sparticuz/chromium")).default;
@@ -74,15 +87,23 @@ async function resolveLaunchOptions() {
   const executablePath = resolveChromeExecutable();
   if (!executablePath) return null;
 
+  const headless = resolveHeadlessMode();
+  const args = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-blink-features=AutomationControlled",
+    "--lang=pt-BR",
+  ];
+
+  if (!headless && process.platform === "win32") {
+    args.push("--window-position=-32000,-32000", "--window-size=1366,900");
+  }
+
   return {
     executablePath,
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--lang=pt-BR",
-    ],
+    headless,
+    args,
   };
 }
 
@@ -120,11 +141,42 @@ function normalizeExternalImageUrl(image) {
 
 async function extractTopListingFromPage(page) {
   return page.evaluate(() => {
-    const cards = Array.from(document.querySelectorAll(".poly-card")).slice(0, 5);
+    const parseSold = (text) => {
+      if (!text) return 0;
+      const milMatch = text.match(/\+?\s*(\d+(?:[.,]\d+)?)\s*mil\s+vendidos/i);
+      if (milMatch) {
+        return Math.round(parseFloat(milMatch[1].replace(",", ".")) * 1000);
+      }
+      const soldMatch = text.match(/(\d[\d.]*)\s+vendidos/i);
+      if (soldMatch) {
+        return parseInt(soldMatch[1].replace(/\./g, ""), 10) || 0;
+      }
+      return 0;
+    };
+
+    const parseStars = (text) => {
+      if (!text) return 4.5;
+      const pipeMatch = text.match(/(\d[.,]\d)\s*\|/);
+      if (pipeMatch) {
+        return parseFloat(pipeMatch[1].replace(",", ".")) || 4.5;
+      }
+      const starMatch = text.match(/(\d[.,]\d)\s*(?:de\s*5|estrelas?)/i);
+      if (starMatch) {
+        return parseFloat(starMatch[1].replace(",", ".")) || 4.5;
+      }
+      return 4.5;
+    };
+
+    const cards = Array.from(
+      document.querySelectorAll(".poly-card, .ui-search-layout__item")
+    ).slice(0, 12);
+
+    const listings = [];
 
     for (const card of cards) {
       const title =
         card.querySelector(".poly-component__title")?.textContent?.trim() ||
+        card.querySelector(".ui-search-item__title")?.textContent?.trim() ||
         card.querySelector("a[title]")?.getAttribute("title")?.trim();
 
       const imgEl =
@@ -140,11 +192,9 @@ async function extractTopListingFromPage(page) {
         card.querySelector(".andes-money-amount__fraction")?.textContent?.trim() ||
         card.querySelector(".poly-price__current")?.textContent?.trim();
 
-      const soldText =
-        card.querySelector(".poly-component__review-compacted")?.textContent ||
-        card.textContent ||
-        "";
-      const soldMatch = soldText.match(/(\d[\d.]*)\s+vendidos/i);
+      const cardText = card.textContent || "";
+      const sold = parseSold(cardText);
+      const rating = parseStars(cardText);
 
       const anchors = Array.from(card.querySelectorAll("a[href]"));
       let trackingUrl = null;
@@ -163,17 +213,21 @@ async function extractTopListingFromPage(page) {
 
       if (!title || !image || image.startsWith("data:")) continue;
 
-      return {
+      listings.push({
         title,
         image,
         price,
-        sold: soldMatch ? parseInt(soldMatch[1].replace(/\./g, ""), 10) : 0,
+        sold,
+        rating,
         trackingUrl,
         directUrl,
-      };
+      });
     }
 
-    return null;
+    if (listings.length === 0) return null;
+
+    listings.sort((a, b) => b.sold - a.sold);
+    return listings[0];
   });
 }
 
@@ -184,6 +238,9 @@ async function getBrowser() {
     sharedBrowserPromise = (async () => {
       const launchOptions = await resolveLaunchOptions();
       if (!launchOptions) return null;
+      console.log(
+        `  🌐 Chrome para scraping ML (headless: ${launchOptions.headless})`
+      );
       return puppeteer.launch(launchOptions);
     })();
   }
@@ -213,59 +270,81 @@ export async function fetchTopListingsForTerms(terms) {
 
   try {
     page = await browser.newPage();
-    await page.setViewport({ width: 1366, height: 900 });
     await page.setExtraHTTPHeaders({
       "Accept-Language": "pt-BR,pt;q=0.9",
     });
 
     for (const term of terms) {
-      try {
-        const searchUrl = buildSearchPageUrl(term);
-        await page.goto(searchUrl, {
-          waitUntil: "domcontentloaded",
-          timeout: 45000,
-        });
+      let listing = null;
 
+      for (let attempt = 1; attempt <= 2 && !listing; attempt += 1) {
         try {
-          await page.waitForSelector(".poly-card", {
-            timeout: process.env.RAILWAY_ENVIRONMENT ? 8000 : 15000,
+          const searchUrl = buildSearchPageUrl(term);
+          if (attempt > 1) {
+            console.log(`  ↻ Retentando "${term}" (tentativa ${attempt})...`);
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+          } else {
+            console.log(`  → ${searchUrl}`);
+          }
+
+          await page.goto(searchUrl, {
+            waitUntil: "domcontentloaded",
+            timeout: 45000,
           });
-        } catch {
-          console.warn(`  ⚠️ Nenhum anúncio encontrado para "${term}"`);
-          continue;
+
+          try {
+            await page.waitForSelector(".poly-card, .ui-search-layout__item", {
+              timeout: process.env.RAILWAY_ENVIRONMENT ? 8000 : 25000,
+            });
+          } catch {
+            const currentUrl = page.url();
+            if (currentUrl.includes("account-verification")) {
+              console.warn(
+                `  🚫 ML redirecionou para login (${currentUrl})`
+              );
+            }
+            continue;
+          }
+
+          await page.evaluate(() => window.scrollBy(0, 400));
+          await new Promise((resolve) =>
+            setTimeout(resolve, process.env.RAILWAY_ENVIRONMENT ? 1000 : 1500)
+          );
+
+          listing = await extractTopListingFromPage(page);
+        } catch (err) {
+          console.warn(
+            `⚠️ Scraping ML falhou para "${term}" (tentativa ${attempt}): ${err.message}`
+          );
         }
-
-        await new Promise((resolve) =>
-          setTimeout(resolve, process.env.RAILWAY_ENVIRONMENT ? 1000 : 2500)
-        );
-
-        const listing = await extractTopListingFromPage(page);
-        if (!listing) {
-          console.warn(`  ⚠️ Não foi possível extrair anúncio para "${term}"`);
-          continue;
-        }
-
-        const itemId =
-          extractMercadoLivreItemId(listing.directUrl) ||
-          extractMercadoLivreItemId(listing.trackingUrl);
-
-        listings.push({
-          termoTendencia: term,
-          nome: listing.title.substring(0, 140),
-          imagem: normalizeExternalImageUrl(listing.image),
-          url:
-            listing.directUrl ||
-            buildMercadoLivreProductUrl(itemId) ||
-            searchUrl,
-          urlBusca: searchUrl,
-          itemId,
-          preco: parsePrice(listing.price),
-          vendidos: listing.sold || 0,
-          marketplace: "mercado-livre",
-        });
-      } catch (err) {
-        console.warn(`⚠️ Scraping ML falhou para "${term}": ${err.message}`);
       }
+
+      if (!listing) {
+        console.warn(`  ⚠️ Não foi possível extrair anúncio para "${term}"`);
+        continue;
+      }
+
+      const itemId =
+        extractMercadoLivreItemId(listing.directUrl) ||
+        extractMercadoLivreItemId(listing.trackingUrl);
+
+      listings.push({
+        termoTendencia: term,
+        nome: listing.title.substring(0, 140),
+        imagem: normalizeExternalImageUrl(listing.image),
+        url:
+          listing.directUrl ||
+          buildMercadoLivreProductUrl(itemId) ||
+          buildSearchPageUrl(term),
+        urlBusca: buildSearchPageUrl(term),
+        itemId,
+        preco: parsePrice(listing.price),
+        vendidos: listing.sold || 0,
+        rating: listing.rating || 4.5,
+        marketplace: "mercado-livre",
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 1200));
     }
   } finally {
     if (page) await page.close().catch(() => null);

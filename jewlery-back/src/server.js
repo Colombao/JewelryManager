@@ -15,6 +15,7 @@ process.on("uncaughtException", (err) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  console.log("📊 Marketplace: scraping ML v2 (lista.mercadolivre.com.br)");
 
   startTrendsJob();
 });

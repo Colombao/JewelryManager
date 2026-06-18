@@ -9,8 +9,11 @@ import {
 export async function getTrendsInAlta(req, res) {
   try {
     console.log("📊 Buscando tendências em alta...");
-    const { limit = 10 } = req.query;
-    const trends = await getMarketplaceTrends(parseInt(limit));
+    const { limit = 10, refresh } = req.query;
+    const shouldRefresh = refresh === "1" || refresh === "true";
+    const trends = await getMarketplaceTrends(parseInt(limit, 10), {
+      refresh: shouldRefresh,
+    });
     return res.json(trends);
   } catch (err) {
     console.error(err);

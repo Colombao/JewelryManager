@@ -27,6 +27,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
+    "dev:clean": "powershell -NoProfile -Command \"$p = Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($p) { $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; node src/server.js\"",
     "seed:auth": "node seed-auth.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init"
