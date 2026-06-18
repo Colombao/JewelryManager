@@ -98,7 +98,7 @@ export default function TrendsAnalysis() {
         {/* Header */}
         <div className="text-center mb-8 sm:mb-12">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 sm:mb-4">
-            📊 Análise Avançada de Tendências
+            Análise Google Trends de Tendências
           </h1>
           <p className="text-base sm:text-lg lg:text-xl text-slate-300 mb-6 sm:mb-8 px-2">
             {analysis ? (
