@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { RiJewelryFill } from "react-icons/ri";
+import DemoWelcomeModal from "./components/DemoWelcomeModal";
 import TextInput from "./components/TextInput";
 
 const displayFont = Cormorant_Garamond({
@@ -68,8 +69,14 @@ export default function Home() {
     );
   }
 
+  const fillDemoCredentials = () => {
+    setEmail("demo@demo");
+    setPassword("demo");
+  };
+
   return (
     <div className="min-h-screen flex">
+      <DemoWelcomeModal onUseCredentials={fillDemoCredentials} />
       {/* Painel esquerdo — branding */}
       <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800">
         <div className="absolute inset-0 opacity-[0.07]">
