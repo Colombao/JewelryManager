@@ -270,7 +270,3 @@ export async function buildHybridTrends(limit = 10) {
 
   return trends.sort((a, b) => b.crescimento - a.crescimento);
 }
-
-export async function buildInventoryTrends(limit = 10) {
-  return buildHybridTrends(limit);
-}

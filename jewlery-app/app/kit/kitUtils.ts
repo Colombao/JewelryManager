@@ -275,15 +275,6 @@ export function createManualLine(
   };
 }
 
-export function nextKitNumber(): number {
-  if (typeof window === "undefined") return 1;
-  const key = "empodere_kit_number";
-  const current = parseInt(localStorage.getItem(key) ?? "10", 10);
-  const next = Number.isFinite(current) ? current + 1 : 1;
-  localStorage.setItem(key, String(next));
-  return next;
-}
-
 export async function fetchNextKitNumber(apiUrl: string): Promise<number> {
   const res = await fetch(`${apiUrl}/kits/next-number`);
   if (!res.ok) throw new Error("Erro ao buscar próximo número do kit");

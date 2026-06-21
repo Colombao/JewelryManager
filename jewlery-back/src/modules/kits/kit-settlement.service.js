@@ -1,6 +1,5 @@
 import prisma from "../../database/prismaClient.js";
 import { calculateBusinessPayment } from "../../utils/commission.js";
-import { isUnitSettled } from "../flow/flow.utils.js";
 
 function roundMoney(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
@@ -542,23 +541,12 @@ async function confirmSettlementByCompany(kitId, note) {
   return mapSettlement(updated);
 }
 
-function getPaymentStatusLabel(status) {
-  if (status === "confirmado") return "Quitado";
-  if (status === "aguardando_confirmacao") return "Aguardando confirmação";
-  if (status === "parcial") return "Parcialmente pago";
-  return "Pendente";
-}
-
 export {
-  buildClosureBreakdown,
   confirmSettlementByCompany,
   confirmSettlementPayment,
   createSettlementForKit,
-  getPaymentStatusLabel,
   getSettlementByKitId,
-  isUnitSettled,
   listSettlementsForReseller,
-  mapSettlement,
   markSettlementPaidByReseller,
   registerSettlementPayment,
 };

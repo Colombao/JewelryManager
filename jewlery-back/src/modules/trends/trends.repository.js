@@ -3,13 +3,6 @@
 import prisma from "../../database/prismaClient.js";
 
 export const trendsRepository = {
-  async findAll() {
-    return prisma.trend.findMany({
-      include: { product: true },
-      orderBy: { score: "desc" },
-    });
-  },
-
   async saveMany(trends) {
     for (const trend of trends) {
       // Create or get product with specific details

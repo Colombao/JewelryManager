@@ -19,17 +19,6 @@ function parseSafeId(value, fieldName) {
   return { value: parsed };
 }
 
-// Para manter compatível com seu middleware atual, exigimos token presente.
-function requireToken(req, res, next) {
-  const auth = req.headers.authorization;
-  if (!auth) return res.status(401).json({ error: "missing token" });
-  const parts = auth.split(" ");
-  if (parts.length !== 2)
-    return res.status(401).json({ error: "invalid token format" });
-  req.token = parts[1];
-  next();
-}
-
 function boardToResponse(board) {
   const steps = board.steps
     .map((s) => ({
@@ -620,7 +609,6 @@ export {
   getBusinessDetail,
   moveCard,
   reorderSteps,
-  requireToken,
   transferCard,
   updateBusinessUnitStatus,
   updateStep,

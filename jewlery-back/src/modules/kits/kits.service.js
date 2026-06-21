@@ -254,13 +254,6 @@ export const kitsService = {
     return kit;
   },
 
-  async getByNumber(kitNumber) {
-    return prisma.kit.findUnique({
-      where: { kitNumber },
-      include: kitInclude(),
-    });
-  },
-
   async create(payload) {
     const {
       kitNumber,

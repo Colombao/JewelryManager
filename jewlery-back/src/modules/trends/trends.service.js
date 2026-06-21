@@ -7,10 +7,6 @@ function calculateScore(googleValue) {
 }
 
 export const trendsService = {
-  async getAll() {
-    return await trendsRepository.findAll();
-  },
-
   async updateTrends() {
     const analysis = await getTrendsAnalysis();
     const googleData = analysis.allTrends || [];

@@ -64,7 +64,7 @@ Rotas admin protegidas por `RequireAuth` (token JWT em `localStorage` via `AuthC
 |------------|--------|
 | `MainLayout` + `Sidebar` | Layout autenticado com navegação lateral |
 | `MarketplaceTrends` | Cards de produtos em alta do Mercado Livre |
-| `TrendsAnalysis` / `TrendsVisualization` | Gráficos e insights do Google Trends |
+| `TrendsAnalysis` | Gráficos e insights do Google Trends |
 | `BusinessKitPanel` | Painel de negócio: unidades vendidas, perdidas e acerto |
 | `DataTable` | Tabelas reutilizáveis com busca e ações |
 | `ResellerLayout` | Layout do portal da revendedora |
@@ -137,7 +137,6 @@ jewlery-app/
 ├── app/
 │   ├── components/       # UI compartilhada
 │   ├── contexts/         # AuthContext
-│   ├── hooks/            # useAuthSession
 │   ├── cadastro/         # productImport.ts
 │   ├── kit/              # kitUtils.ts
 │   └── [páginas]/        # Uma pasta por rota

@@ -188,4 +188,4 @@ async function importProducts(items, { skipDuplicates = true } = {}) {
   return result;
 }
 
-export { importProducts, normalizeKey };
+export { importProducts };

@@ -274,8 +274,3 @@ export async function fetchTopListingsForTerms(terms) {
 
   return listings;
 }
-
-export async function fetchTopListingForTerm(term) {
-  const [listing] = await fetchTopListingsForTerms([term]);
-  return listing || null;
-}
