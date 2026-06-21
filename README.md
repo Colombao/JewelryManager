@@ -55,13 +55,49 @@ npm run dev
 
 Aplicação em `http://localhost:3000`
 
+### 4. Testes unitários
+
+```bash
+# Backend (meta: 75% de cobertura)
+cd jewlery-back
+npm run test:coverage
+
+# Frontend (meta: 25% de cobertura)
+cd jewlery-app
+npm run test:coverage
+```
+
+### 5. Observabilidade (Prometheus + Grafana)
+
+Com a API rodando em `localhost:3001`:
+
+```bash
+docker compose up -d prometheus grafana
+```
+
+| Serviço    | URL                          | Credenciais   |
+|-----------|------------------------------|---------------|
+| Prometheus | http://localhost:9090        | —             |
+| Grafana    | http://localhost:3002        | admin / admin |
+| Métricas API | http://localhost:3001/metrics | —          |
+| Health     | http://localhost:3001/health  | —             |
+
+### 6. SonarCloud (CI)
+
+1. Crie um projeto em [SonarCloud](https://sonarcloud.io) e ajuste `sonar.organization` em `sonar-project.properties`  
+2. Adicione o secret `SONAR_TOKEN` no repositório GitHub  
+3. O workflow `.github/workflows/ci.yml` executa testes + análise estática em cada push/PR  
+
 ### Estrutura do monorepo
 
 ```
 jew/
 ├── jewlery-app/          # Frontend Next.js
 ├── jewlery-back/         # API Express + Prisma
-├── docker-compose.yml    # MySQL local
+├── docker-compose.yml    # MySQL + Prometheus + Grafana
+├── monitoring/           # Config Prometheus/Grafana
+├── sonar-project.properties
+├── .github/workflows/    # CI + SonarCloud
 └── README.md             # Este documento
 ```
 
@@ -177,6 +213,9 @@ O projeto não contemplará:
 - RNF03 – API estruturada seguindo padrões REST  
 - RNF04 – Banco de dados deve garantir integridade ACID  
 - RNF05 – Suporte mínimo para 100 usuários simultâneos  
+- RNF06 – Cobertura de testes unitários com TDD: **75% backend**, **25% frontend**  
+- RNF07 – Análise estática de código e segurança (**SonarCloud**)  
+- RNF08 – Monitoramento e observabilidade (**Prometheus + Grafana**)  
 
 ### Representação dos Requisitos
 (Pode ser incluído posteriormente o diagrama UML on-demand.)
@@ -196,10 +235,63 @@ O projeto não contemplará:
 
 ### Visão Inicial da Arquitetura
 
-```
-Usuário Admin ──► Next.js (jewlery-app) ──► Express API ──► MySQL
-Revendedora   ──► /revendedora           ──► /reseller-portal
-API           ──► Mercado Livre (scraping) + Google Trends
+![Diagrama de arquitetura do CRM Semi Joias](./docs/arquitetura-crm-semi-joias.png)
+
+Visão geral das camadas: usuários, frontend Next.js, API Express, MySQL, integrações externas (Mercado Livre e Google Trends), observabilidade (Prometheus/Grafana) e pipeline de qualidade (testes + SonarCloud).
+
+```mermaid
+flowchart TB
+    subgraph Users["Usuários"]
+        A[Administrador / Lojista]
+        R[Revendedora]
+    end
+
+    subgraph Frontend["Frontend — Next.js 16 :3000"]
+        FE[jewlery-app]
+        FE --- D[Dashboard]
+        FE --- P[Produtos / Kits]
+        FE --- F[Fluxo Kanban]
+        FE --- T[Tendências]
+        FE --- PR[Portal /revendedora]
+    end
+
+    subgraph Backend["Backend — Express 5 :3001"]
+        API[jewlery-back]
+        API --- M1[Products · Kits · Flow]
+        API --- M2[Marketplace · Trends]
+        API --- M3[Resellers · Dashboard · Auth]
+    end
+
+    subgraph Data["Persistência"]
+        DB[(MySQL 8 + Prisma)]
+    end
+
+    subgraph External["Sistemas Externos"]
+        ML[Mercado Livre]
+        GT[Google Trends]
+    end
+
+    subgraph Observability["Observabilidade"]
+        PROM[Prometheus :9090]
+        GRAF[Grafana :3002]
+    end
+
+    subgraph Quality["Qualidade"]
+        CI[GitHub Actions + SonarCloud]
+        TEST[Jest 75% · Vitest 25%]
+    end
+
+    A --> FE
+    R --> PR
+    FE -->|REST + JWT| API
+    API --> DB
+    API --> ML
+    API --> GT
+    API -->|/metrics| PROM --> GRAF
+    CI -.-> API
+    CI -.-> FE
+    TEST -.-> API
+    TEST -.-> FE
 ```
 
 - Interface: Next.js 16 (App Router)  
@@ -319,7 +411,7 @@ Dashboard, fluxo Kanban, produtos, cadastro (com importação), montagem de kits
 - Git e GitHub  
 - Docker  
 - Postman  
-- Jest (futuro, para testes)  
+- Jest (backend) e Vitest (frontend) para testes unitários com TDD  
 
 ### Licenciamento
 - Projeto sob licença MIT  
@@ -370,12 +462,14 @@ Embora o projeto utilize tendências de mercado, não faz uso de dados sensívei
 - Frontend com 12+ telas funcionais  
 - Scraping Mercado Livre e análise Google Trends  
 - Fluxo Kanban com acerto financeiro e portal da revendedora  
-- Job agendado de atualização de tendências (a cada 6 horas)
+- Job agendado de atualização de tendências (a cada 6 horas)  
+- Testes unitários com cobertura mínima (75% backend / 25% frontend)  
+- Observabilidade com Prometheus, Grafana e endpoint `/metrics`  
+- Pipeline CI com SonarCloud
 
 ### Em evolução
 
 - Proteção JWT em todas as rotas sensíveis da API  
-- Testes automatizados (Jest / Playwright)  
 - Exportação de relatórios (PDF/Excel)  
 - Novas fontes de marketplace  
 - Documentação OpenAPI/Swagger

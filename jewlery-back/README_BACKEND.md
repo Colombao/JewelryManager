@@ -231,6 +231,14 @@ Schema completo: `prisma/schema.prisma`
 | `npm run seed:auth` | Cria/atualiza usuário admin de teste |
 | `npm run prisma:generate` | Gera client Prisma |
 | `npm run prisma:migrate` | Roda migrations |
+| `npm test` | Testes unitários (Jest) |
+| `npm run test:coverage` | Testes com relatório de cobertura (meta: 75%) |
+
+## Observabilidade
+
+- `GET /health` — status da API  
+- `GET /metrics` — métricas Prometheus (`jewelry_http_requests_total`, latência, CPU/memória)  
+- Stack local: `docker compose up -d prometheus grafana` (Grafana em `:3002`, admin/admin)
 
 ## Exemplo — tendências do marketplace
 
@@ -261,7 +269,6 @@ Schema completo: `prisma/schema.prisma`
 ## Próximos passos (roadmap)
 
 - [ ] Autenticação JWT obrigatória em rotas sensíveis (hoje várias rotas estão abertas)
-- [ ] Testes automatizados (Jest)
 - [ ] Novas fontes de marketplace (Amazon, etc.)
-- [ ] Rate limiting e observabilidade
+- [ ] Rate limiting adicional
 - [ ] Notificações em tempo real

@@ -21,6 +21,11 @@ import uploadRoutes from "./modules/upload/upload.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.route.js";
 import { ensureUploadDirectories, uploadRoot } from "./config/uploads.js";
 import { getCorsOptions, isAllowedOrigin } from "./config/cors.js";
+import {
+  getMetricsContentType,
+  getMetricsPayload,
+  metricsMiddleware,
+} from "./observability/metrics.js";
 
 const app = express();
 
@@ -52,7 +57,17 @@ app.use((req, res, next) => {
 
 app.use(cors(getCorsOptions()));
 app.use(express.json({ limit: "2mb" }));
+app.use(metricsMiddleware);
 app.use("/uploads", express.static(uploadRoot));
+
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "jewlery-api" });
+});
+
+app.get("/metrics", async (_req, res) => {
+  res.set("Content-Type", getMetricsContentType());
+  res.end(await getMetricsPayload());
+});
 
 // Register (optional helper route)
 app.post("/auth/register", async (req, res) => {

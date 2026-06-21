@@ -11,6 +11,11 @@ out/
 # Build outputs
 dist/
 build/
+*.tsbuildinfo
+
+# Test coverage (gerado por npm run test:coverage)
+coverage/
+**/coverage/
 
 # Env files
 .env*
