@@ -4,6 +4,12 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const { protocol, hostname, port } = new URL(apiUrl);
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["remotion", "@remotion/player"],
+  serverExternalPackages: [
+    "@remotion/renderer",
+    "@remotion/bundler",
+    "@remotion/cli",
+  ],
   images: {
     remotePatterns: [
       {
