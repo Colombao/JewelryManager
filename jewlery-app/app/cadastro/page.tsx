@@ -23,6 +23,10 @@ import {
 } from "./productImport";
 import ImportLoader from "./ImportLoader";
 import { parsePdfCatalog, type PdfCatalogMeta } from "./pdfImport";
+import AdjustedPriceCarousel, {
+  countProductsWithoutAdjustedPrice,
+  type CarouselProduct,
+} from "./AdjustedPriceCarousel";
 
 interface NamedItem {
   id: number;
@@ -141,6 +145,7 @@ export default function CadastroItem() {
   const pdfImportInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showAdjustedCarousel, setShowAdjustedCarousel] = useState(false);
 
   function clearImageSelection() {
     if (imagePreview?.startsWith("blob:")) {
@@ -560,6 +565,21 @@ export default function CadastroItem() {
     marginMultipliers.level3,
   ]);
 
+  const pendingAdjustedCount = useMemo(
+    () => countProductsWithoutAdjustedPrice(products),
+    [products]
+  );
+
+  function handleAdjustedPriceUpdated(updated: CarouselProduct) {
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === updated.id
+          ? { ...p, adjustedPrice: updated.adjustedPrice }
+          : p
+      )
+    );
+  }
+
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return products;
@@ -853,6 +873,19 @@ export default function CadastroItem() {
               </Button>
               <Button
                 type="button"
+                variant="secondary"
+                onClick={() => setShowAdjustedCarousel(true)}
+                className="relative"
+              >
+                Ajustar preços
+                {pendingAdjustedCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">
+                    {pendingAdjustedCount > 99 ? "99+" : pendingAdjustedCount}
+                  </span>
+                )}
+              </Button>
+              <Button
+                type="button"
                 variant="primary"
                 onClick={() => {
                   resetForm();
@@ -1039,6 +1072,16 @@ export default function CadastroItem() {
                 </div>
               </form>
             </Modal>
+
+            <AdjustedPriceCarousel
+              open={showAdjustedCarousel}
+              onClose={() => setShowAdjustedCarousel(false)}
+              products={products}
+              profitMargins={profitMargins}
+              apiUrl={apiUrl}
+              resolveImageUrl={(image) => resolveImageUrl(image, apiUrl)}
+              onProductUpdated={handleAdjustedPriceUpdated}
+            />
 
             <Modal
               open={showImportModal}
