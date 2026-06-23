@@ -1,0 +1,23 @@
+Prints das telas (JPG/PNG) e narração gerada automaticamente.
+
+Imagens:
+  01-dashboard.jpg
+  02-fluxo.jpg
+  03-produtos.jpg
+  04-cadastro-produtos.jpg
+  05-montagem-kit.jpg
+  06-visualizacao-kit.jpg
+  07-revendedoras.jpg
+  08-analise.jpg
+  09-configuracoes.jpg
+
+Áudio (gerado com voz pt-BR):
+  npm run tutorial:audio
+  → salva MP3 em public/tutorial/audio/
+
+Roteiro e textos da narração:
+  remotion/tutorialData.ts
+
+Preview / exportar vídeo:
+  npm run remotion:studio     → composição "SystemTutorial"
+  npm run remotion:tutorial   → out/tutorial-jewlery.mp4
