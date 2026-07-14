@@ -1,4 +1,10 @@
 import prisma from "../../database/prismaClient.js";
+import {
+  getCodePrefixForCategory,
+  isTrioValue,
+  nextCodeForPrefix,
+  normalizeCategoryName,
+} from "./products.category.js";
 
 function normalizeKey(value) {
   return String(value ?? "")
@@ -82,6 +88,7 @@ function buildProductData(item, ids) {
     priceLevel2: toDecimalOrNull(item.priceLevel2),
     priceLevel3: toDecimalOrNull(item.priceLevel3),
     adjustedPrice: toDecimalOrNull(item.adjustedPrice),
+    isTrio: isTrioValue(item.isTrio),
     active: item.active ?? true,
   };
 }
@@ -97,12 +104,15 @@ async function importProducts(items, { skipDuplicates = true } = {}) {
 
   const existingRefs = new Set();
   const existingSkus = new Set();
+  const usedCodes = new Set();
 
-  if (skipDuplicates) {
-    const existing = await prisma.product.findMany({
-      select: { reference: true, sku: true },
-    });
-    for (const product of existing) {
+  const existingProducts = await prisma.product.findMany({
+    select: { reference: true, sku: true, code: true },
+  });
+
+  for (const product of existingProducts) {
+    if (product.code) usedCodes.add(product.code.trim().toLowerCase());
+    if (skipDuplicates) {
       if (product.reference) existingRefs.add(normalizeKey(product.reference));
       if (product.sku) existingSkus.add(normalizeKey(product.sku));
     }
@@ -119,8 +129,10 @@ async function importProducts(items, { skipDuplicates = true } = {}) {
     const row = index + 1;
 
     try {
-      const categoryName =
-        item.categoryName?.trim() || item.name?.trim() || null;
+      const categoryName = normalizeCategoryName(
+        item.categoryName,
+        item.name
+      );
       const platingTypeName =
         item.platingTypeName?.trim() ||
         extractPlatingType(item.name || item.description);
@@ -159,6 +171,13 @@ async function importProducts(items, { skipDuplicates = true } = {}) {
         continue;
       }
 
+      if (!data.code) {
+        const prefix = getCodePrefixForCategory(categoryName);
+        if (prefix) {
+          data.code = nextCodeForPrefix(prefix, usedCodes);
+        }
+      }
+
       if (skipDuplicates) {
         const refKey = data.reference ? normalizeKey(data.reference) : null;
         const skuKey = data.sku ? normalizeKey(data.sku) : null;
@@ -175,6 +194,7 @@ async function importProducts(items, { skipDuplicates = true } = {}) {
       await prisma.product.create({ data });
       result.created++;
 
+      if (data.code) usedCodes.add(data.code.trim().toLowerCase());
       if (data.reference) existingRefs.add(normalizeKey(data.reference));
       if (data.sku) existingSkus.add(normalizeKey(data.sku));
     } catch (err) {

@@ -134,6 +134,7 @@ model Product {
   adjustedPrice  Decimal?  @db.Decimal(10, 2)
 
   // Controle
+  isTrio         Boolean   @default(false)
   active         Boolean   @default(true)
 
   createdAt      DateTime  @default(now())

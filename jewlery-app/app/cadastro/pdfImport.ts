@@ -1,4 +1,8 @@
 import { ImportProductInput, ImportProductRow } from "./productImport";
+import {
+  extractCategoryName,
+  isTrioObservation,
+} from "./productCategory";
 
 export const PDF_ACCEPT = ".pdf,application/pdf";
 
@@ -115,6 +119,9 @@ function mapStandardMatch(
   const qtyRaw = match[9];
 
   const name = cleanProductName(nameRaw);
+  const obsText = obs.trim();
+  const isTrio = isTrioObservation(obsText);
+  const categoryName = extractCategoryName(name);
   const unitPrice = parseMoney(bruto);
   const platingTotal = parseMoney(banho);
   const grandTotal = parseMoney(total);
@@ -130,9 +137,10 @@ function mapStandardMatch(
     reference: reference.trim(),
     sku: reference.trim(),
     name,
-    description: obs.trim() ? `${name} (${obs.trim()})` : name,
+    description:
+      obsText && !isTrio ? `${name} (${obsText})` : name,
     supplierName: supplier.trim(),
-    categoryName: name,
+    categoryName,
     platingTypeName: extractPlatingTypeName(name),
     collectionName,
     quantity: Number.isFinite(quantity) ? quantity : 0,
@@ -142,6 +150,7 @@ function mapStandardMatch(
     platingTotal,
     piecesTotal,
     grandTotal,
+    isTrio,
   };
 }
 
@@ -160,6 +169,8 @@ function mapBanhoOnlyMatch(
   const name = cleanProductName(nameRaw);
   const weight = parseWeight(weightRaw);
   const obsText = obs.trim();
+  const isTrio = isTrioObservation(obsText);
+  const categoryName = extractCategoryName(name);
   const reference = `${obsText}-${weight ?? "0"}`;
   const platingTotal = parseMoney(banho);
   const grandTotal = parseMoney(total);
@@ -169,15 +180,17 @@ function mapBanhoOnlyMatch(
     reference,
     sku: reference,
     name,
-    description: obsText ? `${name} (${obsText})` : name,
+    description:
+      obsText && !isTrio ? `${name} (${obsText})` : name,
     supplierName: supplier.trim(),
-    categoryName: name,
+    categoryName,
     platingTypeName: extractPlatingTypeName(name),
     collectionName,
     quantity: Number.isFinite(quantity) ? quantity : 0,
     weight,
     platingTotal,
     grandTotal,
+    isTrio,
   };
 }
 
@@ -370,9 +383,6 @@ export async function parsePdfCatalog(file: File): Promise<PdfImportResult> {
       const imageFile = pageImages[index];
       if (imageFile) {
         product.imageFile = imageFile;
-      }
-      if (meta.orderNumber && !product.code) {
-        product.code = meta.orderNumber;
       }
       products.push(product);
     });

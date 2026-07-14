@@ -60,6 +60,7 @@ async function create(req, res) {
       priceLevel2,
       priceLevel3,
       adjustedPrice,
+      isTrio,
       active,
     } = req.body;
 
@@ -97,6 +98,7 @@ async function create(req, res) {
         priceLevel3: toDecimalOrNull(priceLevel3),
         adjustedPrice: toDecimalOrNull(adjustedPrice),
 
+        isTrio: Boolean(isTrio),
         active: active ?? true,
       },
       include: {
@@ -140,6 +142,7 @@ async function update(req, res) {
       priceLevel2,
       priceLevel3,
       adjustedPrice,
+      isTrio,
       active,
     } = req.body;
 
@@ -192,6 +195,7 @@ async function update(req, res) {
           ? toDecimalOrNull(adjustedPrice)
           : undefined,
 
+      isTrio: isTrio !== undefined ? Boolean(isTrio) : undefined,
       active: active !== undefined ? active : undefined,
     };
 

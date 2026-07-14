@@ -3,6 +3,7 @@ import {
   getMarginMultipliers,
   ProfitMargin,
 } from "@/lib/pricing";
+import { extractCategoryName } from "./productCategory";
 
 export interface ImportProductRow {
   code?: string;
@@ -26,6 +27,7 @@ export interface ImportProductRow {
   priceLevel2?: string | number;
   priceLevel3?: string | number;
   adjustedPrice?: string | number;
+  isTrio?: boolean;
 }
 
 export type ImportProductInput = ImportProductRow & {
@@ -66,6 +68,7 @@ const COLUMN_ALIASES: Record<string, keyof ImportProductRow | "skip"> = {
   desc: "name",
   nome: "name",
   fornecedor: "supplierName",
+  categoria: "categoryName",
   "preco total": "skip",
   quantidade: "quantity",
   qtd: "quantity",
@@ -80,6 +83,8 @@ const COLUMN_ALIASES: Record<string, keyof ImportProductRow | "skip"> = {
   pv2: "priceLevel2",
   pv3: "priceLevel3",
   "preco ajustado": "adjustedPrice",
+  trio: "isTrio",
+  istrio: "isTrio",
 };
 
 function normalizeHeader(value: unknown): string {
@@ -126,11 +131,21 @@ function rowToProduct(
     if (!field || field === "skip") return;
     const value = row[index];
 
-    if (
-      field === "quantity"
-    ) {
+    if (field === "quantity") {
       const qty = cellToNumber(value);
       if (qty !== undefined) item.quantity = Math.round(qty);
+      return;
+    }
+
+    if (field === "isTrio") {
+      const text = cellToString(value).toLowerCase();
+      item.isTrio =
+        text === "1" ||
+        text === "true" ||
+        text === "sim" ||
+        text === "yes" ||
+        text === "trio" ||
+        Boolean(cellToNumber(value));
       return;
     }
 
@@ -163,7 +178,12 @@ function rowToProduct(
 
   if (reference && !item.sku) item.sku = reference;
   if (name && !item.description) item.description = name;
-  if (name && !item.categoryName) item.categoryName = name;
+  if (item.categoryName?.trim()) {
+    item.categoryName = extractCategoryName(item.categoryName);
+  } else if (name) {
+    item.categoryName = extractCategoryName(name);
+  }
+  if (item.isTrio === undefined) item.isTrio = false;
 
   return item as ImportProductRow;
 }

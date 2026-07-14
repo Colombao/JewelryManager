@@ -23,6 +23,7 @@ import {
 } from "./productImport";
 import ImportLoader from "./ImportLoader";
 import { parsePdfCatalog, type PdfCatalogMeta } from "./pdfImport";
+import { assignSequentialCodes } from "./productCategory";
 import AdjustedPriceCarousel, {
   countProductsWithoutAdjustedPrice,
   type CarouselProduct,
@@ -57,6 +58,7 @@ interface Product {
   priceLevel2: string | null;
   priceLevel3: string | null;
   adjustedPrice: string | null;
+  isTrio: boolean;
   active: boolean;
   supplier?: NamedItem | null;
   category?: NamedItem | null;
@@ -87,6 +89,7 @@ const initialFormData = {
   priceLevel2: "",
   priceLevel3: "",
   adjustedPrice: "",
+  isTrio: false,
   active: true,
 };
 
@@ -273,6 +276,7 @@ export default function CadastroItem() {
       priceLevel2: formData.priceLevel2 || null,
       priceLevel3: formData.priceLevel3 || null,
       adjustedPrice: formData.adjustedPrice || null,
+      isTrio: formData.isTrio,
       active: formData.active,
     };
   }
@@ -359,6 +363,7 @@ export default function CadastroItem() {
       priceLevel2: item.priceLevel2 || "",
       priceLevel3: item.priceLevel3 || "",
       adjustedPrice: item.adjustedPrice || "",
+      isTrio: item.isTrio ?? false,
       active: item.active,
     });
     if (item.image) {
@@ -405,14 +410,18 @@ export default function CadastroItem() {
 
     try {
       if (isPdf) {
-        const { products, meta } = await parsePdfCatalog(file);
-        if (products.length === 0) {
+        const { products: parsed, meta } = await parsePdfCatalog(file);
+        if (parsed.length === 0) {
           toast.error("Nenhum produto válido encontrado no PDF");
           setShowImportModal(false);
           return;
         }
+        const withCodes = assignSequentialCodes(
+          parsed,
+          products.map((p) => p.code)
+        );
         setImportMeta(meta);
-        setImportPreview(applyImportPriceLevels(products, profitMargins));
+        setImportPreview(applyImportPriceLevels(withCodes, profitMargins));
         return;
       }
 
@@ -423,7 +432,15 @@ export default function CadastroItem() {
         return;
       }
       setImportMeta(null);
-      setImportPreview(applyImportPriceLevels(rows, profitMargins));
+      setImportPreview(
+        applyImportPriceLevels(
+          assignSequentialCodes(
+            rows,
+            products.map((p) => p.code)
+          ),
+          profitMargins
+        )
+      );
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Erro ao ler arquivo de importação"
@@ -673,7 +690,16 @@ export default function CadastroItem() {
         key: "category",
         header: "Categoria",
         cellClassName: "text-slate-600 whitespace-nowrap",
-        render: (p) => p.category?.name || "-",
+        render: (p) => (
+          <span className="inline-flex items-center gap-1.5">
+            {p.category?.name || "-"}
+            {p.isTrio && (
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                Trio
+              </span>
+            )}
+          </span>
+        ),
       },
       {
         key: "plating",
@@ -1037,18 +1063,32 @@ export default function CadastroItem() {
                 </div>
 
                 <div className="sticky bottom-0 -mx-1 px-1 pt-4 mt-2 bg-white border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
-                    <input
-                      type="checkbox"
-                      name="active"
-                      checked={formData.active}
-                      onChange={handleChange}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-slate-700">
-                      Produto ativo no catálogo
-                    </span>
-                  </label>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-5">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
+                      <input
+                        type="checkbox"
+                        name="isTrio"
+                        checked={formData.isTrio}
+                        onChange={handleChange}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-slate-700">
+                        Produto trio (3 peças iguais)
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
+                      <input
+                        type="checkbox"
+                        name="active"
+                        checked={formData.active}
+                        onChange={handleChange}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-slate-700">
+                        Produto ativo no catálogo
+                      </span>
+                    </label>
+                  </div>
 
                   <div className="flex items-center gap-2 sm:gap-3">
                     <Button
@@ -1171,6 +1211,8 @@ export default function CadastroItem() {
                         <th className="px-3 py-2">Código</th>
                         <th className="px-3 py-2">Referência</th>
                         <th className="px-3 py-2">Nome</th>
+                        <th className="px-3 py-2">Categoria</th>
+                        <th className="px-3 py-2">Trio</th>
                         <th className="px-3 py-2">Fornecedor</th>
                         <th className="px-3 py-2">Qtd</th>
                         <th className="px-3 py-2">Preço Unit.</th>
@@ -1179,9 +1221,36 @@ export default function CadastroItem() {
                     <tbody>
                       {importPreview.slice(0, 8).map((row, index) => (
                         <tr key={`${row.reference}-${index}`} className="border-t">
-                          <td className="px-3 py-2">{row.code || "-"}</td>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            {row.code || "-"}
+                          </td>
                           <td className="px-3 py-2">{row.reference || "-"}</td>
                           <td className="px-3 py-2">{row.name}</td>
+                          <td className="px-3 py-2">
+                            {row.categoryName || "-"}
+                          </td>
+                          <td className="px-3 py-2">
+                            <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(row.isTrio)}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setImportPreview((prev) =>
+                                    prev.map((item, i) =>
+                                      i === index
+                                        ? { ...item, isTrio: checked }
+                                        : item
+                                    )
+                                  );
+                                }}
+                                className="h-3.5 w-3.5 rounded border-slate-300"
+                              />
+                              <span className="text-xs text-slate-600">
+                                {row.isTrio ? "Sim" : "Não"}
+                              </span>
+                            </label>
+                          </td>
                           <td className="px-3 py-2">{row.supplierName || "-"}</td>
                           <td className="px-3 py-2">{row.quantity ?? 0}</td>
                           <td className="px-3 py-2">{row.unitPrice ?? "-"}</td>
