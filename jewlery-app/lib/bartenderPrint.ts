@@ -352,7 +352,11 @@ export function buildBatchPrintBTXML(
     defaultCopies,
     ...products.map((p) => copiesByProductId?.[p.id] ?? defaultCopies)
   );
-  const csv = escapeXml(buildRecordSetCsv(products, settings.fieldMap));
+  // CDATA keeps CSV intact inside BTXML (and later JSON-wrapped Script).
+  const csv = buildRecordSetCsv(products, settings.fieldMap).replace(
+    /]]>/g,
+    "]]]]><![CDATA[>"
+  );
   const jobCodes = products
     .map((p) => p.code || p.sku || String(p.id))
     .join(",");
@@ -376,12 +380,29 @@ ${printSetup}
       <RecordSet Name="${databaseName}" Type="btTextFile" AddIfNone="true">
         <Delimitation>btDelimQuoteAndComma</Delimitation>
         <UseFieldNamesFromFirstRecord>true</UseFieldNamesFromFirstRecord>
-        <TextData>${csv}</TextData>
+        <TextData><![CDATA[${csv}]]></TextData>
       </RecordSet>
     </Print>
   </Command>
 </XMLScript>
 `;
+}
+
+/** Actions API only accepts JSON/YAML — wrap BTXML in PrintBTXMLScriptAction. */
+export function buildPrintBTXMLScriptAction(
+  products: LabelProduct[],
+  settings: BartenderPrintSettings,
+  copiesByProductId?: Record<number, number>
+) {
+  return {
+    PrintBTXMLScriptAction: {
+      Name: "JewleryPrintBTXML",
+      Script: buildBatchPrintBTXML(products, settings, copiesByProductId),
+      ReturnPrintData: true,
+      ReturnPrintSummary: true,
+      ReturnLabelData: true,
+    },
+  };
 }
 
 /**
@@ -447,11 +468,9 @@ export function buildBatchPrintActions(
   copiesByProductId?: Record<number, number>
 ) {
   const defaultCopies = Math.max(1, Math.floor(settings.copies || 1));
-  const recordRange = buildRecordRange(products.length);
 
-  // JSON fallback: one action per product with RecordRange "1" so the
-  // leftover manual selection (e.g. "6") is never reused.
-  const actions = products.map((product, index) => {
+  // JSON array of actions (Actions API style), not a custom ActionGroup object.
+  return products.map((product, index) => {
     const named = buildNamedDataSources(product, settings.fieldMap);
     const rowAction: Record<string, unknown> = {
       Name: `Print_${product.code || product.id}`,
@@ -475,14 +494,6 @@ export function buildBatchPrintActions(
     }
     return { PrintBTWAction: rowAction };
   });
-
-  return {
-    ActionGroup: {
-      Name: "JewleryLabelBatch",
-      RecordRange: recordRange,
-      Actions: actions,
-    },
-  };
 }
 
 export function buildPrintBTWAction(
@@ -490,8 +501,7 @@ export function buildPrintBTWAction(
   settings: BartenderPrintSettings,
   copies = settings.copies
 ) {
-  return buildBatchPrintActions([product], settings, { [product.id]: copies })
-    .ActionGroup.Actions[0];
+  return buildBatchPrintActions([product], settings, { [product.id]: copies })[0];
 }
 
 export function bartenderActionsUrl(apiUrl: string) {
@@ -578,9 +588,21 @@ async function postBartender(
     ? await response.json().catch(() => null)
     : await response.text().catch(() => null);
 
-  if (!response.ok) {
+  // API sometimes returns 400 with a Portuguese deserialization message as text/plain.
+  const asText =
+    typeof parsed === "string"
+      ? parsed
+      : parsed && typeof parsed === "object"
+        ? JSON.stringify(parsed)
+        : "";
+  if (
+    !response.ok ||
+    /formato válido|deserialization|deserializa/i.test(asText)
+  ) {
     throw new BartenderPrintError(
-      `BarTender retornou HTTP ${response.status}.`,
+      typeof parsed === "string" && parsed.trim()
+        ? parsed.trim()
+        : `BarTender retornou HTTP ${response.status || 400}.`,
       response.status,
       parsed
     );
@@ -609,59 +631,43 @@ export async function printProductLabels(
   const codes = products.map((p) => p.code || p.sku || String(p.id)).join(", ");
 
   try {
-    // 1) RecordSet batch — BR13|BR14 on the same row when the .btw has 2 templates
+    // 1) JSON + PrintBTXMLScriptAction (RecordSet + RecordRange) — correct API format
     try {
       const body = await postBartender(
         settings,
-        buildBatchPrintBTXML(products, settings, options?.copiesByProductId),
-        "application/xml",
-        fetchImpl
-      );
-      assertBartenderSuccess(body, codes);
-    } catch (recordSetError) {
-      if (
-        recordSetError instanceof BartenderPrintError &&
-        recordSetError.message.includes("conectar ao BarTender")
-      ) {
-        throw recordSetError;
-      }
-
-      // 2) NamedSubString batch — still one request; each product keeps its own code
-      try {
-        const body = await postBartender(
-          settings,
-          buildNamedSubstringBatchBTXML(
+        JSON.stringify(
+          buildPrintBTXMLScriptAction(
             products,
             settings,
             options?.copiesByProductId
-          ),
-          "application/xml",
-          fetchImpl
-        );
-        assertBartenderSuccess(body, codes);
-      } catch (namedError) {
-        if (
-          namedError instanceof BartenderPrintError &&
-          namedError.message.includes("conectar ao BarTender")
-        ) {
-          throw namedError;
-        }
-
-        // 3) JSON ActionGroup fallback
-        const body = await postBartender(
-          settings,
-          JSON.stringify(
-            buildBatchPrintActions(
-              products,
-              settings,
-              options?.copiesByProductId
-            )
-          ),
-          "application/json",
-          fetchImpl
-        );
-        assertBartenderSuccess(body, codes);
+          )
+        ),
+        "application/json",
+        fetchImpl
+      );
+      assertBartenderSuccess(body, codes);
+    } catch (btxmlError) {
+      if (
+        btxmlError instanceof BartenderPrintError &&
+        btxmlError.message.includes("conectar ao BarTender")
+      ) {
+        throw btxmlError;
       }
+
+      // 2) JSON array of PrintBTWAction (NamedDataSources + RecordRange per item)
+      const body = await postBartender(
+        settings,
+        JSON.stringify(
+          buildBatchPrintActions(
+            products,
+            settings,
+            options?.copiesByProductId
+          )
+        ),
+        "application/json",
+        fetchImpl
+      );
+      assertBartenderSuccess(body, codes);
     }
 
     options?.onProgress?.(

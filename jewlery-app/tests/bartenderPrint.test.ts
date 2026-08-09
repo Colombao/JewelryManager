@@ -5,6 +5,7 @@ import {
   buildBatchPrintBTXML,
   buildNamedDataSources,
   buildNamedSubstringBatchBTXML,
+  buildPrintBTXMLScriptAction,
   buildRecordRange,
   buildRecordSetCsv,
   describePrintRows,
@@ -152,18 +153,24 @@ describe("settings persistence", () => {
 });
 
 describe("printProductLabels single request", () => {
-  it("posts once with all selected codes and treats Faulted as error", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      headers: { get: () => "application/json" },
-      json: async () => ({
-        Status: "Faulted",
-        Messages: ["[Error] fail"],
-      }),
-    });
+  it("sends JSON PrintBTXMLScriptAction (not raw XML)", () => {
+    const payload = buildPrintBTXMLScriptAction(
+      [br13, br14, br15],
+      loadBartenderSettings()
+    );
+    expect(payload.PrintBTXMLScriptAction.Name).toBe("JewleryPrintBTXML");
+    expect(payload.PrintBTXMLScriptAction.Script).toContain("<RecordRange>1-3</RecordRange>");
+    expect(payload.PrintBTXMLScriptAction.Script).toContain("BR13");
+    // Must be JSON-serializable for the Actions API
+    const json = JSON.stringify(payload);
+    expect(json.startsWith("{")).toBe(true);
+    expect(json).toContain("PrintBTXMLScriptAction");
+    expect(json).not.toMatch(/^<\?xml/);
+  });
 
-    // RecordSet fails, NamedSubString fails, JSON fails → 3 attempts, still one product set
-    fetchImpl
+  it("posts once with all selected codes and treats Faulted as error", async () => {
+    const fetchImpl = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         headers: { get: () => "application/json" },
@@ -173,11 +180,6 @@ describe("printProductLabels single request", () => {
         ok: true,
         headers: { get: () => "application/json" },
         json: async () => ({ Status: "Faulted", Messages: ["[Error] b"] }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        headers: { get: () => "application/json" },
-        json: async () => ({ Status: "Faulted", Messages: ["[Error] c"] }),
       });
 
     const result = await printProductLabels(
@@ -189,14 +191,17 @@ describe("printProductLabels single request", () => {
     expect(result.printed).toBe(0);
     expect(result.errors).toHaveLength(3);
     expect(fetchImpl).toHaveBeenCalled();
-    const bodies = fetchImpl.mock.calls.map((c) => String(c[1]?.body ?? ""));
-    expect(bodies.some((b) => b.includes("BR13") && b.includes("BR14"))).toBe(
-      true
+    const firstBody = String(fetchImpl.mock.calls[0][1]?.body ?? "");
+    expect(firstBody).toContain("PrintBTXMLScriptAction");
+    expect(firstBody).toContain("BR13");
+    expect(firstBody).toContain("BR14");
+    expect(firstBody).not.toContain("BR01");
+    expect(fetchImpl.mock.calls[0][1]?.headers?.["Content-Type"]).toBe(
+      "application/json"
     );
-    expect(bodies.some((b) => b.includes("BR01"))).toBe(false);
   });
 
-  it("succeeds with a single RecordSet request for all products", async () => {
+  it("succeeds with a single JSON BTXML request for all products", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       headers: { get: () => "application/json" },
@@ -213,8 +218,26 @@ describe("printProductLabels single request", () => {
     expect(result.errors).toHaveLength(0);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const body = String(fetchImpl.mock.calls[0][1]?.body ?? "");
+    expect(body).toContain("PrintBTXMLScriptAction");
     expect(body).toContain("BR13");
     expect(body).toContain("BR14");
     expect(body).toContain("BR15");
+  });
+
+  it("surfaces deserialization errors from the Actions API", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      headers: { get: () => "text/plain" },
+      text: async () =>
+        "O corpo de solicitação não tem um formato válido. Detalhes: Exception during deserialization",
+      json: async () => null,
+    });
+
+    const result = await printProductLabels([br13], loadBartenderSettings(), {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result.printed).toBe(0);
+    expect(result.errors[0].error).toMatch(/formato válido|deserialization/i);
   });
 });
