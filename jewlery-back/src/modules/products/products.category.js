@@ -80,10 +80,38 @@ function getCodePrefixForCategory(categoryName) {
   return rule?.prefix ?? null;
 }
 
+const TRIO_SIZE_SUFFIXES = ["", "P", "M", "G"];
+const TRIO_SIZE_LABELS = {
+  P: "Pequeno",
+  M: "Médio",
+  G: "Grande",
+};
+
+function getTrioBaseCode(code) {
+  const trimmed = String(code ?? "").trim();
+  const match = trimmed.match(/^(.*\d+)[pmg]$/i);
+  return match ? match[1] : trimmed;
+}
+
+function isTrioSizeCode(code) {
+  const trimmed = String(code ?? "").trim();
+  if (!trimmed) return false;
+  return /^(.*\d+)[pmg]$/i.test(trimmed);
+}
+
+function buildTrioCodes(baseCode) {
+  const root = getTrioBaseCode(baseCode);
+  const upperRoot = /[A-Z]/.test(root) && !/[a-z]/.test(root);
+  return TRIO_SIZE_SUFFIXES.map((suffix) => {
+    if (!suffix) return root;
+    return `${root}${upperRoot ? suffix : suffix.toLowerCase()}`;
+  });
+}
+
 function parseCodeNumber(code, prefix) {
   const match = String(code ?? "")
     .trim()
-    .match(new RegExp(`^${prefix}(\\d+)$`, "i"));
+    .match(new RegExp(`^${prefix}(\\d+)[pmg]?$`, "i"));
   if (!match) return null;
   return Number(match[1]);
 }
@@ -106,10 +134,71 @@ function isTrioValue(value) {
   return Boolean(value);
 }
 
+function withSizeName(name, suffix) {
+  if (!suffix) return name;
+  const label = TRIO_SIZE_LABELS[suffix];
+  if (new RegExp(`\\(${label}\\)$`, "i").test(String(name).trim())) return name;
+  return `${String(name).trim()} (${label})`;
+}
+
+function withSizeSuffix(value, suffix) {
+  if (!value?.trim?.() || !suffix) return value ?? null;
+  const base = String(value).trim().replace(/[-_]?[pmg]$/i, "");
+  return `${base}-${suffix}`;
+}
+
+function expandTrioItem(item) {
+  if (!isTrioValue(item?.isTrio) || !item?.code?.trim?.() || isTrioSizeCode(item.code)) {
+    return [item];
+  }
+
+  const codes = buildTrioCodes(item.code);
+  const sizeKeys = [null, "p", "m", "g"];
+
+  return codes.map((code, index) => {
+    const suffix = TRIO_SIZE_SUFFIXES[index];
+    const sizeKey = sizeKeys[index];
+    const sizePrices =
+      sizeKey && item.trioSizePrices ? item.trioSizePrices[sizeKey] : undefined;
+
+    return {
+      ...item,
+      unitPrice: sizePrices?.unitPrice ?? item.unitPrice,
+      totalPrice: sizePrices?.totalPrice ?? item.totalPrice,
+      grandTotal: sizePrices?.grandTotal ?? item.grandTotal,
+      priceLevel1: sizePrices?.priceLevel1 ?? item.priceLevel1,
+      priceLevel2: sizePrices?.priceLevel2 ?? item.priceLevel2,
+      priceLevel3: sizePrices?.priceLevel3 ?? item.priceLevel3,
+      adjustedPrice: sizePrices?.adjustedPrice ?? item.adjustedPrice,
+      code,
+      name: withSizeName(item.name, suffix),
+      description: item.description
+        ? withSizeName(item.description, suffix)
+        : item.description,
+      sku: withSizeSuffix(item.sku, suffix),
+      reference: withSizeSuffix(item.reference, suffix),
+      barcode: item.barcode?.trim?.()
+        ? withSizeSuffix(item.barcode, suffix)
+        : code,
+      isTrio: true,
+      trioSizePrices: undefined,
+    };
+  });
+}
+
+function expandTrioItems(items) {
+  return items.flatMap((item) => expandTrioItem(item));
+}
+
 export {
   CATEGORY_RULES,
+  buildTrioCodes,
+  expandTrioItem,
+  expandTrioItems,
   extractCategoryName,
   getCodePrefixForCategory,
+  getTrioBaseCode,
+  isTrioSizeCode,
   isTrioValue,
   nextCodeForPrefix,
   normalizeCategoryName,
