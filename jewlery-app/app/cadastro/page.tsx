@@ -361,10 +361,10 @@ export default function CadastroItem() {
         : undefined;
 
       toast.success(
-        editingId
+        trioCodes?.length
+          ? `Trio: ${trioCodes.join(", ")}`
+          : editingId
           ? "Produto atualizado com sucesso!"
-          : trioCodes?.length
-          ? `Trio cadastrado: ${trioCodes.join(", ")}`
           : "Produto cadastrado com sucesso!"
       );
 
@@ -431,6 +431,46 @@ export default function CadastroItem() {
       await loadProducts();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao atualizar status");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleToggleTrio(product: Product, checked: boolean) {
+    try {
+      setIsLoading(true);
+
+      if (!checked) {
+        const res = await fetch(`${apiUrl}/products/${product.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isTrio: false }),
+        });
+        if (!res.ok) throw new Error("Erro ao atualizar trio");
+        toast.success("Marcação de trio removida");
+        await loadProducts();
+        return;
+      }
+
+      const res = await fetch(`${apiUrl}/products/${product.id}/expand-trio`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Erro ao gerar tamanhos do trio");
+      }
+
+      const codes: string[] = Array.isArray(data?.codes) ? data.codes : [];
+      toast.success(
+        codes.length
+          ? `Trio gerado: ${codes.join(", ")}`
+          : "Produto marcado como trio"
+      );
+      await loadProducts();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao atualizar trio");
     } finally {
       setIsLoading(false);
     }
@@ -737,12 +777,37 @@ export default function CadastroItem() {
         header: "Categoria",
         cellClassName: "text-slate-600 whitespace-nowrap",
         render: (p) => (
-          <span className="inline-flex items-center gap-1.5">
-            {p.category?.name || "-"}
+          <span className="inline-flex items-center gap-2">
+            <span>{p.category?.name || "-"}</span>
+            <label
+              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide cursor-pointer select-none ${
+                p.isTrio
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-slate-100 text-slate-500 hover:bg-amber-50 hover:text-amber-700"
+              }`}
+              title={
+                p.isTrio
+                  ? "Desmarcar trio"
+                  : "Marcar como trio e gerar códigos P/M/G"
+              }
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(p.isTrio)}
+                onChange={(e) => handleToggleTrio(p, e.target.checked)}
+                className="h-3 w-3 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+              />
+              É trio
+            </label>
             {p.isTrio && (
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
-                Trio
-              </span>
+              <button
+                type="button"
+                onClick={() => handleToggleTrio(p, true)}
+                className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 underline underline-offset-2 hover:text-amber-900"
+                title="Gerar ou completar códigos base + P/M/G"
+              >
+                Gerar P/M/G
+              </button>
             )}
           </span>
         ),
@@ -881,6 +946,24 @@ export default function CadastroItem() {
           </p>
           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-slate-600">
             <span>{p.category?.name || "—"}</span>
+            <label className="inline-flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={Boolean(p.isTrio)}
+                onChange={(e) => handleToggleTrio(p, e.target.checked)}
+                className="h-3 w-3 rounded border-slate-300"
+              />
+              É trio
+            </label>
+            {p.isTrio && (
+              <button
+                type="button"
+                onClick={() => handleToggleTrio(p, true)}
+                className="text-amber-700 underline"
+              >
+                Gerar P/M/G
+              </button>
+            )}
             <span>Qtd: {p.quantity}</span>
             <span>{formatCurrency(p.adjustedPrice || p.priceLevel1)}</span>
           </div>
@@ -1108,10 +1191,10 @@ export default function CadastroItem() {
                   </FormCard>
                 </div>
 
-                {formData.isTrio && !editingId && (
+                {formData.isTrio && (
                   <FormCard
                     title="Preços do trio (P / M / G)"
-                    subtitle="Opcionais. Se vazio, P/M/G usam o mesmo total geral acima. Códigos: base, baseP, baseM, baseG."
+                    subtitle="Opcionais. Se vazio, P/M/G usam o mesmo total geral. Ao salvar, gera os códigos base + P/M/G."
                   >
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <Field
@@ -1158,11 +1241,10 @@ export default function CadastroItem() {
                         name="isTrio"
                         checked={formData.isTrio}
                         onChange={handleChange}
-                        disabled={Boolean(editingId)}
                         className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
                       <span className="text-sm text-slate-700">
-                        Produto trio (gera base + P/M/G)
+                        É trio (gera base + P/M/G)
                       </span>
                     </label>
                     <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">

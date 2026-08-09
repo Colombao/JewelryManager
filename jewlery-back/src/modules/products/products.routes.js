@@ -2,6 +2,7 @@ import express from "express";
 
 import {
   create,
+  expandTrio,
   importBulk,
   kitsUsage,
   list,
@@ -15,6 +16,7 @@ router.get("/kits-usage", kitsUsage);
 router.get("/", list);
 router.post("/import", importBulk);
 router.post("/", create);
+router.post("/:id/expand-trio", expandTrio);
 router.put("/:id", update);
 router.delete("/:id", remove);
 

@@ -6,6 +6,7 @@ import {
   normalizeCategoryName,
 } from "./products.category.js";
 import { importProducts as runProductImport } from "./products.import.js";
+import { ensureTrioVariants } from "./products.trio.js";
 
 function toNumberOrNull(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -256,7 +257,7 @@ async function update(req, res) {
       active: active !== undefined ? active : undefined,
     };
 
-    const updated = await prisma.product.update({
+    let updated = await prisma.product.update({
       where: { id: Number(id) },
       data,
       include: {
@@ -267,10 +268,39 @@ async function update(req, res) {
       },
     });
 
+    if (Boolean(isTrio) || updated.isTrio) {
+      const trio = await ensureTrioVariants(updated.id, {
+        trioSizePrices: req.body.trioSizePrices,
+      });
+      updated = {
+        ...trio.products.find((item) => item.id === updated.id) || updated,
+        trioVariants: trio.products,
+        codes: trio.codes,
+      };
+    }
+
     res.json(updated);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "internal error" });
+    res.status(err.status || 500).json({ error: err.message || "internal error" });
+  }
+}
+
+async function expandTrio(req, res) {
+  try {
+    const { id } = req.params;
+    const trio = await ensureTrioVariants(id, {
+      trioSizePrices: req.body?.trioSizePrices,
+    });
+    res.json({
+      ...(trio.products[0] || {}),
+      trioVariants: trio.products,
+      codes: trio.codes,
+      baseCode: trio.baseCode,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({ error: err.message || "internal error" });
   }
 }
 
@@ -361,4 +391,4 @@ async function kitsUsage(req, res) {
   }
 }
 
-export { create, importBulk, kitsUsage, list, remove, update };
+export { create, expandTrio, importBulk, kitsUsage, list, remove, update };
