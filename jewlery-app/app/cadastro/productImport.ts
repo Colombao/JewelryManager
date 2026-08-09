@@ -3,7 +3,10 @@ import {
   getMarginMultipliers,
   ProfitMargin,
 } from "@/lib/pricing";
-import { extractCategoryName } from "./productCategory";
+import {
+  extractCategoryName,
+  type TrioSizePrices,
+} from "./productCategory";
 
 export interface ImportProductRow {
   code?: string;
@@ -28,6 +31,8 @@ export interface ImportProductRow {
   priceLevel3?: string | number;
   adjustedPrice?: string | number;
   isTrio?: boolean;
+  /** Totais por tamanho (P/M/G) — usados ao expandir o trio */
+  trioSizePrices?: TrioSizePrices;
 }
 
 export type ImportProductInput = ImportProductRow & {
@@ -40,6 +45,27 @@ function toAmount(value: string | number | undefined): number | null {
   return Number.isFinite(amount) ? amount : null;
 }
 
+function levelsFromGrandTotal(
+  grandTotal: number,
+  multipliers: ReturnType<typeof getMarginMultipliers>
+) {
+  return {
+    priceLevel1: (grandTotal * multipliers.level1).toFixed(2),
+    priceLevel2: (grandTotal * multipliers.level2).toFixed(2),
+    priceLevel3: (grandTotal * multipliers.level3).toFixed(2),
+  };
+}
+
+function applySizePriceLevels(
+  size: TrioSizePrices[keyof TrioSizePrices],
+  multipliers: ReturnType<typeof getMarginMultipliers>
+) {
+  if (!size) return size;
+  const grandTotal = toAmount(size.grandTotal);
+  if (grandTotal === null || grandTotal <= 0) return size;
+  return { ...size, ...levelsFromGrandTotal(grandTotal, multipliers) };
+}
+
 export function applyImportPriceLevels(
   items: ImportProductInput[],
   margins: ProfitMargin[]
@@ -48,14 +74,21 @@ export function applyImportPriceLevels(
 
   return items.map((item) => {
     const grandTotal = toAmount(item.grandTotal);
-    if (grandTotal === null || grandTotal <= 0) return item;
+    const next: ImportProductInput = { ...item };
 
-    return {
-      ...item,
-      priceLevel1: (grandTotal * multipliers.level1).toFixed(2),
-      priceLevel2: (grandTotal * multipliers.level2).toFixed(2),
-      priceLevel3: (grandTotal * multipliers.level3).toFixed(2),
-    };
+    if (grandTotal !== null && grandTotal > 0) {
+      Object.assign(next, levelsFromGrandTotal(grandTotal, multipliers));
+    }
+
+    if (item.trioSizePrices) {
+      next.trioSizePrices = {
+        p: applySizePriceLevels(item.trioSizePrices.p, multipliers),
+        m: applySizePriceLevels(item.trioSizePrices.m, multipliers),
+        g: applySizePriceLevels(item.trioSizePrices.g, multipliers),
+      };
+    }
+
+    return next;
   });
 }
 
@@ -87,6 +120,27 @@ const COLUMN_ALIASES: Record<string, keyof ImportProductRow | "skip"> = {
   istrio: "isTrio",
 };
 
+/** Colunas opcionais de total por tamanho do trio (P/M/G). */
+const TRIO_TOTAL_ALIASES: Record<string, "p" | "m" | "g"> = {
+  "total p": "p",
+  "total m": "m",
+  "total g": "g",
+  totalp: "p",
+  totalm: "m",
+  totalg: "g",
+  "preco p": "p",
+  "preco m": "m",
+  "preco g": "g",
+  "preco pequeno": "p",
+  "preco medio": "m",
+  "preco grande": "g",
+  "total pequeno": "p",
+  "total medio": "m",
+  "total grande": "g",
+};
+
+type MappedField = keyof ImportProductRow | "skip" | `trioTotal:${"p" | "m" | "g"}` | null;
+
 function normalizeHeader(value: unknown): string {
   return String(value ?? "")
     .normalize("NFD")
@@ -113,23 +167,39 @@ function cellToDecimal(value: unknown): string | undefined {
   return n.toFixed(2);
 }
 
-function mapHeaderRow(headers: unknown[]): (keyof ImportProductRow | "skip" | null)[] {
+function mapHeaderRow(headers: unknown[]): MappedField[] {
   return headers.map((header) => {
     const normalized = normalizeHeader(header);
     if (!normalized) return null;
+    const trioSize = TRIO_TOTAL_ALIASES[normalized];
+    if (trioSize) return `trioTotal:${trioSize}`;
     return COLUMN_ALIASES[normalized] ?? null;
   });
 }
 
 function rowToProduct(
   row: unknown[],
-  mapping: (keyof ImportProductRow | "skip" | null)[]
+  mapping: MappedField[]
 ): ImportProductRow | null {
   const item: Partial<ImportProductRow> = {};
+  const trioSizePrices: TrioSizePrices = {};
 
   mapping.forEach((field, index) => {
     if (!field || field === "skip") return;
     const value = row[index];
+
+    if (field.startsWith("trioTotal:")) {
+      const size = field.split(":")[1] as "p" | "m" | "g";
+      const decimal = cellToDecimal(value);
+      if (decimal !== undefined) {
+        trioSizePrices[size] = {
+          ...(trioSizePrices[size] || {}),
+          grandTotal: decimal,
+          unitPrice: decimal,
+        };
+      }
+      return;
+    }
 
     if (field === "quantity") {
       const qty = cellToNumber(value);
@@ -167,8 +237,13 @@ function rowToProduct(
     }
 
     const text = cellToString(value);
-    if (text) item[field] = text;
+    if (text) (item as Record<string, unknown>)[field] = text;
   });
+
+  if (Object.keys(trioSizePrices).length > 0) {
+    item.trioSizePrices = trioSizePrices;
+    if (item.isTrio === undefined) item.isTrio = true;
+  }
 
   const reference = item.reference?.trim();
   const name = item.name?.trim();

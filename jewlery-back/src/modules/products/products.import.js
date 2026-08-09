@@ -1,5 +1,7 @@
 import prisma from "../../database/prismaClient.js";
 import {
+  buildTrioCodes,
+  expandTrioItem,
   getCodePrefixForCategory,
   isTrioValue,
   nextCodeForPrefix,
@@ -178,25 +180,56 @@ async function importProducts(items, { skipDuplicates = true } = {}) {
         }
       }
 
-      if (skipDuplicates) {
-        const refKey = data.reference ? normalizeKey(data.reference) : null;
-        const skuKey = data.sku ? normalizeKey(data.sku) : null;
+      const variants = expandTrioItem({
+        ...item,
+        ...data,
+        trioSizePrices: item.trioSizePrices,
+      });
 
-        if (
-          (refKey && existingRefs.has(refKey)) ||
-          (skuKey && existingSkus.has(skuKey))
-        ) {
-          result.skipped++;
-          continue;
+      for (const variant of variants) {
+        const variantData = buildProductData(variant, {
+          supplierId,
+          categoryId,
+          platingTypeId,
+          collectionId,
+        });
+        if (!variantData) continue;
+
+        if (skipDuplicates) {
+          const refKey = variantData.reference
+            ? normalizeKey(variantData.reference)
+            : null;
+          const skuKey = variantData.sku
+            ? normalizeKey(variantData.sku)
+            : null;
+
+          if (
+            (refKey && existingRefs.has(refKey)) ||
+            (skuKey && existingSkus.has(skuKey))
+          ) {
+            result.skipped++;
+            continue;
+          }
+        }
+
+        await prisma.product.create({ data: variantData });
+        result.created++;
+
+        if (variantData.code) {
+          usedCodes.add(variantData.code.trim().toLowerCase());
+          if (isTrioValue(variantData.isTrio)) {
+            for (const code of buildTrioCodes(variantData.code)) {
+              usedCodes.add(code.toLowerCase());
+            }
+          }
+        }
+        if (variantData.reference) {
+          existingRefs.add(normalizeKey(variantData.reference));
+        }
+        if (variantData.sku) {
+          existingSkus.add(normalizeKey(variantData.sku));
         }
       }
-
-      await prisma.product.create({ data });
-      result.created++;
-
-      if (data.code) usedCodes.add(data.code.trim().toLowerCase());
-      if (data.reference) existingRefs.add(normalizeKey(data.reference));
-      if (data.sku) existingSkus.add(normalizeKey(data.sku));
     } catch (err) {
       result.errors.push({
         row,

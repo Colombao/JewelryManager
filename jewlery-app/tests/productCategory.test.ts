@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   assignSequentialCodes,
+  buildTrioCodes,
+  expandTrioItem,
   extractCategoryName,
+  getTrioBaseCode,
   isTrioObservation,
+  isTrioSizeCode,
   nextCodeForPrefix,
 } from "@/app/cadastro/productCategory";
 
@@ -68,5 +72,64 @@ describe("nextCodeForPrefix", () => {
   it("pads with two digits", () => {
     expect(nextCodeForPrefix("br", [])).toBe("br01");
     expect(nextCodeForPrefix("br", ["br01", "br09"])).toBe("br10");
+  });
+
+  it("counts trio size suffixes toward the next number", () => {
+    expect(nextCodeForPrefix("br", ["br10", "br10p", "br10m", "br10g"])).toBe(
+      "br11"
+    );
+  });
+});
+
+describe("trio size codes", () => {
+  it("builds base + P/M/G", () => {
+    expect(buildTrioCodes("br10")).toEqual(["br10", "br10p", "br10m", "br10g"]);
+    expect(buildTrioCodes("BR10")).toEqual(["BR10", "BR10P", "BR10M", "BR10G"]);
+    expect(getTrioBaseCode("br10p")).toBe("br10");
+    expect(isTrioSizeCode("br10p")).toBe(true);
+    expect(isTrioSizeCode("br10")).toBe(false);
+  });
+
+  it("expands trio into four products with optional size prices", () => {
+    const items = expandTrioItem({
+      name: "Brinco Argola",
+      code: "br10",
+      isTrio: true,
+      reference: "REF1",
+      grandTotal: "100.00",
+      priceLevel1: "200.00",
+      trioSizePrices: {
+        p: { grandTotal: "80.00", priceLevel1: "160.00" },
+        g: { grandTotal: "120.00", priceLevel1: "240.00" },
+      },
+    });
+
+    expect(items.map((item) => item.code)).toEqual([
+      "br10",
+      "br10p",
+      "br10m",
+      "br10g",
+    ]);
+    expect(items[1].name).toBe("Brinco Argola (Pequeno)");
+    expect(items[2].name).toBe("Brinco Argola (Médio)");
+    expect(items[3].name).toBe("Brinco Argola (Grande)");
+    expect(items[1].grandTotal).toBe("80.00");
+    expect(items[1].priceLevel1).toBe("160.00");
+    expect(items[2].grandTotal).toBe("100.00");
+    expect(items[3].grandTotal).toBe("120.00");
+    expect(items[1].reference).toBe("REF1-P");
+  });
+
+  it("reserves P/M/G while assigning sequential codes", () => {
+    const items = assignSequentialCodes(
+      [
+        { name: "Brinco A", categoryName: "Brinco", isTrio: true },
+        { name: "Brinco B", categoryName: "Brinco" },
+      ],
+      []
+    );
+
+    expect(items[0].code).toBe("br01");
+    expect(items[1].code).toBe("br02");
   });
 });

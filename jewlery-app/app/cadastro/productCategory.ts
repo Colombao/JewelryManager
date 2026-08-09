@@ -87,10 +87,48 @@ export function isTrioObservation(obs: string | undefined | null): boolean {
   return /\btrio\b/i.test(obs.trim());
 }
 
+/** Sufixos de tamanho do trio: base + P/M/G */
+export const TRIO_SIZE_SUFFIXES = ["", "P", "M", "G"] as const;
+
+export type TrioSizeSuffix = (typeof TRIO_SIZE_SUFFIXES)[number];
+
+export const TRIO_SIZE_LABELS: Record<Exclude<TrioSizeSuffix, "">, string> = {
+  P: "Pequeno",
+  M: "Médio",
+  G: "Grande",
+};
+
+/** Extrai o código base (ex.: br10p → br10). */
+export function getTrioBaseCode(code: string): string {
+  const trimmed = code.trim();
+  const match = trimmed.match(/^(.*\d+)[pmg]$/i);
+  return match ? match[1] : trimmed;
+}
+
+/** True se o código já é variante P/M/G (ex.: br10p). */
+export function isTrioSizeCode(code: string | undefined | null): boolean {
+  if (!code?.trim()) return false;
+  return /^(.*\d+)[pmg]$/i.test(code.trim());
+}
+
+/** br10 → [br10, br10p, br10m, br10g] (preserva caixa do base). */
+export function buildTrioCodes(baseCode: string): string[] {
+  const root = getTrioBaseCode(baseCode);
+  const upperRoot = /[A-Z]/.test(root) && !/[a-z]/.test(root);
+  return TRIO_SIZE_SUFFIXES.map((suffix) => {
+    if (!suffix) return root;
+    return `${root}${upperRoot ? suffix : suffix.toLowerCase()}`;
+  });
+}
+
+export function formatTrioCodePreview(baseCode: string): string {
+  return buildTrioCodes(baseCode).join(", ");
+}
+
 function parseCodeNumber(code: string, prefix: string): number | null {
   const match = code
     .trim()
-    .match(new RegExp(`^${prefix}(\\d+)$`, "i"));
+    .match(new RegExp(`^${prefix}(\\d+)[pmg]?$`, "i"));
   if (!match) return null;
   return Number(match[1]);
 }
@@ -108,8 +146,19 @@ export function nextCodeForPrefix(
   return `${prefix}${String(max + 1).padStart(2, "0")}`;
 }
 
+function reserveTrioCodes(used: Set<string>, baseCode: string) {
+  for (const code of buildTrioCodes(baseCode)) {
+    used.add(code.toLowerCase());
+  }
+}
+
 export function assignSequentialCodes<
-  T extends { name: string; categoryName?: string; code?: string }
+  T extends {
+    name: string;
+    categoryName?: string;
+    code?: string;
+    isTrio?: boolean;
+  }
 >(
   items: T[],
   existingCodes: Iterable<string | null | undefined> = []
@@ -122,7 +171,9 @@ export function assignSequentialCodes<
 
   return items.map((item) => {
     if (item.code?.trim()) {
-      used.add(item.code.trim().toLowerCase());
+      const code = item.code.trim();
+      if (item.isTrio) reserveTrioCodes(used, code);
+      else used.add(code.toLowerCase());
       return item;
     }
 
@@ -131,7 +182,110 @@ export function assignSequentialCodes<
     if (!prefix) return { ...item, categoryName: category };
 
     const code = nextCodeForPrefix(prefix, used);
-    used.add(code.toLowerCase());
+    if (item.isTrio) reserveTrioCodes(used, code);
+    else used.add(code.toLowerCase());
     return { ...item, code, categoryName: category };
   });
+}
+
+export type TrioSizePriceFields = {
+  unitPrice?: string | number | null;
+  totalPrice?: string | number | null;
+  grandTotal?: string | number | null;
+  priceLevel1?: string | number | null;
+  priceLevel2?: string | number | null;
+  priceLevel3?: string | number | null;
+  adjustedPrice?: string | number | null;
+};
+
+export type TrioSizePrices = {
+  p?: TrioSizePriceFields;
+  m?: TrioSizePriceFields;
+  g?: TrioSizePriceFields;
+};
+
+function withSizeName(name: string, suffix: TrioSizeSuffix): string {
+  if (!suffix) return name;
+  const label = TRIO_SIZE_LABELS[suffix];
+  if (new RegExp(`\\(${label}\\)$`, "i").test(name.trim())) return name;
+  return `${name.trim()} (${label})`;
+}
+
+function withSizeSuffix(value: string | undefined | null, suffix: TrioSizeSuffix) {
+  if (!value?.trim() || !suffix) return value ?? null;
+  const base = value.trim().replace(/[-_]?[pmg]$/i, "");
+  return `${base}-${suffix}`;
+}
+
+/**
+ * Expande 1 produto trio (código base) em base + P + M + G.
+ * Se já for código com sufixo ou não for trio, devolve a linha original.
+ */
+export function expandTrioItem<
+  T extends {
+    name: string;
+    code?: string | null;
+    isTrio?: boolean;
+    sku?: string | null;
+    reference?: string | null;
+    barcode?: string | null;
+    description?: string | null;
+    unitPrice?: string | number | null;
+    totalPrice?: string | number | null;
+    grandTotal?: string | number | null;
+    priceLevel1?: string | number | null;
+    priceLevel2?: string | number | null;
+    priceLevel3?: string | number | null;
+    adjustedPrice?: string | number | null;
+    trioSizePrices?: TrioSizePrices;
+  }
+>(item: T): T[] {
+  if (!item.isTrio || !item.code?.trim() || isTrioSizeCode(item.code)) {
+    return [item];
+  }
+
+  const codes = buildTrioCodes(item.code);
+  const sizeKeys = [null, "p", "m", "g"] as const;
+
+  return codes.map((code, index) => {
+    const suffix = TRIO_SIZE_SUFFIXES[index];
+    const sizeKey = sizeKeys[index];
+    const sizePrices =
+      sizeKey && item.trioSizePrices
+        ? item.trioSizePrices[sizeKey]
+        : undefined;
+
+    const priced = {
+      unitPrice: sizePrices?.unitPrice ?? item.unitPrice,
+      totalPrice: sizePrices?.totalPrice ?? item.totalPrice,
+      grandTotal: sizePrices?.grandTotal ?? item.grandTotal,
+      priceLevel1: sizePrices?.priceLevel1 ?? item.priceLevel1,
+      priceLevel2: sizePrices?.priceLevel2 ?? item.priceLevel2,
+      priceLevel3: sizePrices?.priceLevel3 ?? item.priceLevel3,
+      adjustedPrice: sizePrices?.adjustedPrice ?? item.adjustedPrice,
+    };
+
+    return {
+      ...item,
+      ...priced,
+      code,
+      name: withSizeName(item.name, suffix),
+      description: item.description
+        ? withSizeName(item.description, suffix)
+        : item.description,
+      sku: withSizeSuffix(item.sku, suffix),
+      reference: withSizeSuffix(item.reference, suffix),
+      barcode: item.barcode?.trim()
+        ? withSizeSuffix(item.barcode, suffix)
+        : code,
+      isTrio: true,
+      trioSizePrices: undefined,
+    };
+  });
+}
+
+export function expandTrioItems<T extends Parameters<typeof expandTrioItem>[0]>(
+  items: T[]
+): T[] {
+  return items.flatMap((item) => expandTrioItem(item));
 }
