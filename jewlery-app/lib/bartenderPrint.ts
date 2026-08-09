@@ -28,6 +28,12 @@ export interface BartenderPrintSettings {
    * records on the same row automatically.
    */
   labelsPerRow: number;
+  /**
+   * Name of the text-database connection inside the .btw
+   * (BarTender → Database Connection Setup). Must match or RecordSet
+   * won't replace data and the last manual "Reg. selecionados" is used.
+   */
+  databaseName: string;
   fieldMap: BartenderFieldMap;
 }
 
@@ -77,6 +83,8 @@ export function getDefaultBartenderSettings(): BartenderPrintSettings {
     printer: process.env.NEXT_PUBLIC_BARTENDER_PRINTER?.trim() || "",
     copies: 1,
     labelsPerRow: 2,
+    databaseName:
+      process.env.NEXT_PUBLIC_BARTENDER_DATABASE_NAME?.trim() || "Text File 1",
     fieldMap: { ...DEFAULT_BARTENDER_FIELD_MAP },
   };
 }
@@ -152,6 +160,7 @@ export function loadBartenderSettings(): BartenderPrintSettings {
       documentPath,
       documentFolder,
       labelsPerRow,
+      databaseName: parsed.databaseName?.trim() || defaults.databaseName,
       fieldMap: {
         ...defaults.fieldMap,
         ...(parsed.fieldMap ?? {}),
@@ -300,10 +309,30 @@ function namedSubStringXml(named: Record<string, string>): string {
     .join("\n");
 }
 
+/** Overrides BarTender "Reg. selecionados" (e.g. leftover "6") with 1..N. */
+export function buildRecordRange(productCount: number): string {
+  const n = Math.max(1, Math.floor(productCount));
+  return n === 1 ? "1" : `1-${n}`;
+}
+
+function buildPrintSetupXml(options: {
+  printerXml: string;
+  copies: number;
+  recordRange: string;
+  useDatabase: boolean;
+}): string {
+  return `      <PrintSetup>
+${options.printerXml}        <IdenticalCopiesOfLabel>${options.copies}</IdenticalCopiesOfLabel>
+        <UseDatabase>${options.useDatabase ? "true" : "false"}</UseDatabase>
+        <EnablePrompting>false</EnablePrompting>
+        <RecordRange>${escapeXml(options.recordRange)}</RecordRange>
+      </PrintSetup>`;
+}
+
 /**
  * Single BTXML request for the whole selection.
- * Uses one Print + RecordSet so BarTender places BR13|BR14 on the same row
- * when the document has 2 templates.
+ * Replaces the text DB + forces RecordRange so BarTender does not reuse the
+ * last manual "Reg. selecionados" (e.g. only record 6 / BR01).
  */
 export function buildBatchPrintBTXML(
   products: LabelProduct[],
@@ -327,16 +356,24 @@ export function buildBatchPrintBTXML(
   const jobCodes = products
     .map((p) => p.code || p.sku || String(p.id))
     .join(",");
+  const recordRange = buildRecordRange(products.length);
+  const databaseName = escapeXml(
+    settings.databaseName?.trim() || "Text File 1"
+  );
+  const printSetup = buildPrintSetupXml({
+    printerXml,
+    copies,
+    recordRange,
+    useDatabase: true,
+  });
 
   return `<?xml version="1.0" encoding="utf-8"?>
 <XMLScript Version="2.0">
   <Command Name="jewlery-labels">
     <Print WaitForJobToComplete="true" JobName="jewlery-${escapeXml(jobCodes)}" ReturnPrintData="true" ReturnSummary="true" ReturnLabelData="true">
       <Format CloseAtEnd="true" SaveAtEnd="false">${formatPath}</Format>
-      <PrintSetup>
-${printerXml}        <IdenticalCopiesOfLabel>${copies}</IdenticalCopiesOfLabel>
-      </PrintSetup>
-      <RecordSet Name="Text File 1" Type="btTextFile" AddIfNone="true">
+${printSetup}
+      <RecordSet Name="${databaseName}" Type="btTextFile" AddIfNone="true">
         <Delimitation>btDelimQuoteAndComma</Delimitation>
         <UseFieldNamesFromFirstRecord>true</UseFieldNamesFromFirstRecord>
         <TextData>${csv}</TextData>
@@ -371,11 +408,15 @@ export function buildNamedSubstringBatchBTXML(
       const named = buildNamedDataSources(product, settings.fieldMap);
       const copies = copiesByProductId?.[product.id] ?? defaultCopies;
       const code = product.code || product.sku || String(product.id);
+      const printSetup = buildPrintSetupXml({
+        printerXml,
+        copies,
+        recordRange: "1",
+        useDatabase: false,
+      });
       return `    <Print WaitForJobToComplete="true" JobName="jewlery-${escapeXml(code)}" ReturnLabelData="true">
       <Format CloseAtEnd="${index === products.length - 1 ? "true" : "false"}" SaveAtEnd="false">${formatPath}</Format>
-      <PrintSetup>
-${printerXml}        <IdenticalCopiesOfLabel>${copies}</IdenticalCopiesOfLabel>
-      </PrintSetup>
+${printSetup}
 ${namedSubStringXml(named)}
     </Print>`;
     })
@@ -406,15 +447,20 @@ export function buildBatchPrintActions(
   copiesByProductId?: Record<number, number>
 ) {
   const defaultCopies = Math.max(1, Math.floor(settings.copies || 1));
+  const recordRange = buildRecordRange(products.length);
+
+  // JSON fallback: one action per product with RecordRange "1" so the
+  // leftover manual selection (e.g. "6") is never reused.
   const actions = products.map((product, index) => {
     const named = buildNamedDataSources(product, settings.fieldMap);
-    const action: Record<string, unknown> = {
+    const rowAction: Record<string, unknown> = {
       Name: `Print_${product.code || product.id}`,
       Document: settings.documentPath,
       DocumentFile: settings.documentPath,
       SaveAfterPrint: false,
       CloseDocumentAfterPrint: index === products.length - 1,
       Copies: String(copiesByProductId?.[product.id] ?? defaultCopies),
+      RecordRange: "1",
       NamedDataSources: named,
       QueryPrompts: Object.entries(named).map(([Name, Value]) => ({
         Name,
@@ -425,14 +471,15 @@ export function buildBatchPrintActions(
       ReturnLabelData: true,
     };
     if (settings.printer.trim()) {
-      action.Printer = settings.printer.trim();
+      rowAction.Printer = settings.printer.trim();
     }
-    return { PrintBTWAction: action };
+    return { PrintBTWAction: rowAction };
   });
 
   return {
     ActionGroup: {
       Name: "JewleryLabelBatch",
+      RecordRange: recordRange,
       Actions: actions,
     },
   };

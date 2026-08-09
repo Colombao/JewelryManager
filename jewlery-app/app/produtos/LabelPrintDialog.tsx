@@ -10,6 +10,7 @@ import {
   LabelProduct,
   applySelectedBtwFileName,
   buildNamedDataSources,
+  buildRecordRange,
   buildRecordSetCsv,
   describePrintRows,
   fileNameFromDocumentPath,
@@ -603,16 +604,42 @@ export default function LabelPrintDialog({
                 </label>
               </div>
 
+              <label className="block text-xs font-medium text-slate-600">
+                Nome da conexão de banco no .btw
+                <input
+                  type="text"
+                  value={settings.databaseName}
+                  disabled={isPrinting}
+                  onChange={(e) =>
+                    persistSettings({
+                      ...settings,
+                      databaseName: e.target.value,
+                    })
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+                  placeholder="Text File 1"
+                />
+                <span className="mt-1 block font-normal text-[11px] text-slate-400">
+                  Em BarTender: Configuração da conexão com o banco. Tem que ser
+                  o mesmo nome, senão ele ignora nossos dados e usa o “Reg.
+                  selecionados” antigo (ex.: 6).
+                </span>
+              </label>
+
               <p className="text-[11px] leading-relaxed text-slate-400">
-                Campos enviados ao .btw:{" "}
+                O job força{" "}
+                <span className="font-mono">
+                  RecordRange ={" "}
+                  {buildRecordRange(Math.max(1, selectedProducts.length))}
+                </span>{" "}
+                (registros da seleção), não o valor manual da última impressão.
+                Campos:{" "}
                 <span className="font-mono">code</span>,{" "}
                 <span className="font-mono">name</span>,{" "}
                 <span className="font-mono">sku</span>,{" "}
                 <span className="font-mono">price</span>,{" "}
                 <span className="font-mono">barcode</span>,{" "}
-                <span className="font-mono">category</span>. Se ainda sair{" "}
-                <span className="font-mono">BR01</span>, confira no BarTender se
-                o objeto usa exatamente esses nomes.
+                <span className="font-mono">category</span>.
               </p>
             </div>
           )}

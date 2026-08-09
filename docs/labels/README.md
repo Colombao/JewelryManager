@@ -7,10 +7,13 @@ Template: `Documento2.btw` — BarTender 2022 Enterprise, 48,7 × 15 mm, **2 tem
 Na tela **Produtos → Imprimir etiquetas**, ao marcar ex. BR13, BR14 e BR15:
 
 1. O app monta **um único request** ao BarTender (`localhost:5159`)
-2. Envia os 3 registros juntos (CSV / RecordSet)
-3. Com 2 templates, a impressora deve sair assim:
+2. Substitui o banco de texto do .btw com esses 3 registros
+3. Força **Reg. selecionados / RecordRange = `1-3`** (não reutiliza o “6” da última impressão manual)
+4. Com 2 templates, a impressora deve sair assim:
    - Linha 1: **BR13 | BR14**
    - Linha 2: **BR15**
+
+Se o nome da conexão no BarTender não for `Text File 1`, ajuste em **Configuração do BarTender → Nome da conexão de banco**.
 
 ## Configuração obrigatória no .btw (senão sai tudo BR01)
 

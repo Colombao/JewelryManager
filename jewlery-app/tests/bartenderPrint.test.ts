@@ -5,6 +5,7 @@ import {
   buildBatchPrintBTXML,
   buildNamedDataSources,
   buildNamedSubstringBatchBTXML,
+  buildRecordRange,
   buildRecordSetCsv,
   describePrintRows,
   getProductLabelType,
@@ -85,6 +86,17 @@ describe("batch payload", () => {
     expect(xml).toContain("BR14");
     expect(xml).toContain("BR15");
     expect(xml.match(/<Print /g)?.length).toBe(1);
+  });
+
+  it("forces RecordRange for the selection instead of leftover manual record", () => {
+    expect(buildRecordRange(1)).toBe("1");
+    expect(buildRecordRange(3)).toBe("1-3");
+    const settings = loadBartenderSettings();
+    const xml = buildBatchPrintBTXML([br13, br14, br15], settings);
+    expect(xml).toContain("<RecordRange>1-3</RecordRange>");
+    expect(xml).toContain("<UseDatabase>true</UseDatabase>");
+    expect(xml).toContain("<EnablePrompting>false</EnablePrompting>");
+    expect(xml).not.toContain("<RecordRange>6</RecordRange>");
   });
 
   it("builds NamedSubString fallback with one Print per product in one script", () => {
