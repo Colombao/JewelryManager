@@ -39,7 +39,7 @@ export type ImportProductInput = ImportProductRow & {
   imageFile?: File;
 };
 
-function toAmount(value: string | number | undefined): number | null {
+function toAmount(value: string | number | null | undefined): number | null {
   if (value === undefined || value === null || value === "") return null;
   const amount = Number(String(value).replace(",", "."));
   return Number.isFinite(amount) ? amount : null;
@@ -168,7 +168,7 @@ function cellToDecimal(value: unknown): string | undefined {
 }
 
 function mapHeaderRow(headers: unknown[]): MappedField[] {
-  return headers.map((header) => {
+  return headers.map((header): MappedField => {
     const normalized = normalizeHeader(header);
     if (!normalized) return null;
     const trioSize = TRIO_TOTAL_ALIASES[normalized];
