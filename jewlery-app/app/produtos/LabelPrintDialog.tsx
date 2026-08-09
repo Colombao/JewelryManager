@@ -13,6 +13,7 @@ import {
   loadBartenderSettings,
   printProductLabels,
   saveBartenderSettings,
+  validateBartenderDocumentPath,
 } from "@/lib/bartenderPrint";
 import { formatBRL, parsePrice, resolveImageUrl } from "@/app/kit/kitUtils";
 
@@ -112,8 +113,9 @@ export default function LabelPrintDialog({
       toast.error("Selecione ao menos um produto para imprimir");
       return;
     }
-    if (!settings.documentPath.trim()) {
-      toast.error("Informe o caminho do Documento2.btw neste PC");
+    const pathError = validateBartenderDocumentPath(settings.documentPath);
+    if (pathError) {
+      toast.error(pathError);
       setShowSettings(true);
       return;
     }
@@ -331,7 +333,7 @@ export default function LabelPrintDialog({
               </label>
 
               <label className="block text-xs font-medium text-slate-600">
-                Caminho do Documento2.btw
+                Caminho completo do arquivo .btw (inclui o nome do arquivo)
                 <input
                   type="text"
                   value={settings.documentPath}
@@ -343,8 +345,12 @@ export default function LabelPrintDialog({
                     })
                   }
                   className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900"
-                  placeholder="C:\Etiquetas\Documento2.btw"
+                  placeholder="C:\Users\AlmaW\Desktop\bartender\Documento2.btw"
                 />
+                <span className="mt-1 block font-normal text-[11px] text-slate-400">
+                  Errado: pasta só (`...\Desktop\bartender`). Certo: arquivo
+                  (`...\Desktop\bartender\Documento2.btw`).
+                </span>
               </label>
 
               <label className="block text-xs font-medium text-slate-600">

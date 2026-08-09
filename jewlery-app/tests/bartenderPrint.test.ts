@@ -8,6 +8,7 @@ import {
   loadBartenderSettings,
   printProductLabels,
   saveBartenderSettings,
+  validateBartenderDocumentPath,
   type LabelProduct,
 } from "@/lib/bartenderPrint";
 
@@ -111,6 +112,22 @@ describe("settings persistence", () => {
     expect(loaded.copies).toBe(3);
     expect(loaded.fieldMap.Nome).toBe("name");
     expect(loaded.fieldMap.SKU).toBe("sku");
+  });
+});
+
+describe("validateBartenderDocumentPath", () => {
+  it("rejects folder paths without .btw", () => {
+    expect(
+      validateBartenderDocumentPath("C:\\Users\\AlmaW\\Desktop\\bartender")
+    ).toMatch(/\.btw/i);
+  });
+
+  it("accepts full .btw path", () => {
+    expect(
+      validateBartenderDocumentPath(
+        "C:\\Users\\AlmaW\\Desktop\\bartender\\Documento2.btw"
+      )
+    ).toBeNull();
   });
 });
 

@@ -203,6 +203,16 @@ export function bartenderActionsUrl(apiUrl: string) {
   return `${base}/api/actions?Wait=60s&MessageCount=50&MessageSeverity=Info`;
 }
 
+/** Full path to a .btw file (not a folder). */
+export function validateBartenderDocumentPath(path: string): string | null {
+  const value = path.trim();
+  if (!value) return "Informe o caminho completo do Documento2.btw neste PC.";
+  if (!/\.btw$/i.test(value)) {
+    return 'O caminho precisa terminar com o arquivo .btw (ex.: C:\\Users\\AlmaW\\Desktop\\bartender\\Documento2.btw), não só a pasta.';
+  }
+  return null;
+}
+
 export async function checkBartenderAvailable(
   apiUrl: string,
   fetchImpl: typeof fetch = fetch
