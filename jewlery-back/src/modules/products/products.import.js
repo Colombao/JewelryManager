@@ -91,6 +91,8 @@ function buildProductData(item, ids) {
     priceLevel3: toDecimalOrNull(item.priceLevel3),
     adjustedPrice: toDecimalOrNull(item.adjustedPrice),
     isTrio: isTrioValue(item.isTrio),
+    trioGroupId: item.trioGroupId?.trim?.() || item.trioGroupId || null,
+    trioSize: item.trioSize?.trim?.() || item.trioSize || null,
     active: item.active ?? true,
   };
 }
@@ -183,7 +185,6 @@ async function importProducts(items, { skipDuplicates = true } = {}) {
       const variants = expandTrioItem({
         ...item,
         ...data,
-        trioSizePrices: item.trioSizePrices,
       });
 
       for (const variant of variants) {

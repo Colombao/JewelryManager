@@ -63,6 +63,8 @@ interface Product {
   priceLevel3: string | null;
   adjustedPrice: string | null;
   isTrio: boolean;
+  trioGroupId?: string | null;
+  trioSize?: string | null;
   active: boolean;
   supplier?: NamedItem | null;
   category?: NamedItem | null;
@@ -94,10 +96,6 @@ const initialFormData = {
   priceLevel3: "",
   adjustedPrice: "",
   isTrio: false,
-  /** Totais gerais por tamanho (trio P/M/G) */
-  trioTotalP: "",
-  trioTotalM: "",
-  trioTotalG: "",
   active: true,
 };
 
@@ -256,31 +254,7 @@ export default function CadastroItem() {
     }));
   };
 
-  function buildSizePricePayload(total: string) {
-    const amount = Number(String(total).replace(",", "."));
-    if (!total.trim() || !Number.isFinite(amount) || amount <= 0) return undefined;
-    return {
-      unitPrice: amount.toFixed(2),
-      grandTotal: amount.toFixed(2),
-      priceLevel1: (amount * marginMultipliers.level1).toFixed(2),
-      priceLevel2: (amount * marginMultipliers.level2).toFixed(2),
-      priceLevel3: (amount * marginMultipliers.level3).toFixed(2),
-    };
-  }
-
   function buildPayload(imageUrl?: string | null) {
-    const trioSizePrices = formData.isTrio
-      ? {
-          p: buildSizePricePayload(formData.trioTotalP),
-          m: buildSizePricePayload(formData.trioTotalM),
-          g: buildSizePricePayload(formData.trioTotalG),
-        }
-      : undefined;
-
-    const hasTrioPrices =
-      trioSizePrices &&
-      (trioSizePrices.p || trioSizePrices.m || trioSizePrices.g);
-
     return {
       code: formData.code || null,
       sku: formData.sku || null,
@@ -309,7 +283,6 @@ export default function CadastroItem() {
       priceLevel3: formData.priceLevel3 || null,
       adjustedPrice: formData.adjustedPrice || null,
       isTrio: formData.isTrio,
-      trioSizePrices: hasTrioPrices ? trioSizePrices : undefined,
       active: formData.active,
     };
   }
@@ -407,9 +380,6 @@ export default function CadastroItem() {
       priceLevel3: item.priceLevel3 || "",
       adjustedPrice: item.adjustedPrice || "",
       isTrio: item.isTrio ?? false,
-      trioTotalP: "",
-      trioTotalM: "",
-      trioTotalG: "",
       active: item.active,
     });
     if (item.image) {
@@ -804,10 +774,15 @@ export default function CadastroItem() {
                 type="button"
                 onClick={() => handleToggleTrio(p, true)}
                 className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 underline underline-offset-2 hover:text-amber-900"
-                title="Gerar ou completar códigos base + P/M/G"
+                title="Criar/ligar itens BASE + P/M/G no banco"
               >
-                Gerar P/M/G
+                Gerar tamanhos
               </button>
+            )}
+            {p.trioSize && (
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                {p.trioSize}
+              </span>
             )}
           </span>
         ),
@@ -961,7 +936,7 @@ export default function CadastroItem() {
                 onClick={() => handleToggleTrio(p, true)}
                 className="text-amber-700 underline"
               >
-                Gerar P/M/G
+                Gerar tamanhos
               </button>
             )}
             <span>Qtd: {p.quantity}</span>
@@ -1191,48 +1166,6 @@ export default function CadastroItem() {
                   </FormCard>
                 </div>
 
-                {formData.isTrio && (
-                  <FormCard
-                    title="Preços do trio (P / M / G)"
-                    subtitle="Opcionais. Se vazio, P/M/G usam o mesmo total geral. Ao salvar, gera os códigos base + P/M/G."
-                  >
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <Field
-                        label="Total Pequeno (P)"
-                        name="trioTotalP"
-                        type="number"
-                        step="0.01"
-                        value={formData.trioTotalP}
-                        onChange={handleChange}
-                        compact
-                      />
-                      <Field
-                        label="Total Médio (M)"
-                        name="trioTotalM"
-                        type="number"
-                        step="0.01"
-                        value={formData.trioTotalM}
-                        onChange={handleChange}
-                        compact
-                      />
-                      <Field
-                        label="Total Grande (G)"
-                        name="trioTotalG"
-                        type="number"
-                        step="0.01"
-                        value={formData.trioTotalG}
-                        onChange={handleChange}
-                        compact
-                      />
-                    </div>
-                    {formData.code?.trim() && (
-                      <p className="mt-3 text-xs text-slate-500 font-mono">
-                        Códigos: {formatTrioCodePreview(formData.code.trim())}
-                      </p>
-                    )}
-                  </FormCard>
-                )}
-
                 <div className="sticky bottom-0 -mx-1 px-1 pt-4 mt-2 bg-white border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-5">
                     <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
@@ -1244,7 +1177,12 @@ export default function CadastroItem() {
                         className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
                       <span className="text-sm text-slate-700">
-                        É trio (gera base + P/M/G)
+                        É trio (cria itens BASE/P/M/G ligados)
+                        {formData.code?.trim() ? (
+                          <span className="block text-xs font-mono text-slate-500 font-normal normal-case">
+                            {formatTrioCodePreview(formData.code.trim())}
+                          </span>
+                        ) : null}
                       </span>
                     </label>
                     <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">

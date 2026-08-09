@@ -67,6 +67,8 @@ function buildCreateData(body, overrides = {}) {
     priceLevel3,
     adjustedPrice,
     isTrio,
+    trioGroupId,
+    trioSize,
     active,
   } = { ...body, ...overrides };
 
@@ -99,13 +101,15 @@ function buildCreateData(body, overrides = {}) {
     adjustedPrice: toDecimalOrNull(adjustedPrice),
 
     isTrio: Boolean(isTrio),
+    trioGroupId: trioGroupId ?? null,
+    trioSize: trioSize ?? null,
     active: active ?? true,
   };
 }
 
 async function create(req, res) {
   try {
-    const { name, isTrio, code, trioSizePrices, categoryId } = req.body;
+    const { name, isTrio, code, categoryId } = req.body;
 
     if (!name?.trim()) {
       return res.status(400).json({ error: "name required" });
@@ -140,7 +144,6 @@ async function create(req, res) {
       name: name.trim(),
       code: resolvedCode,
       isTrio: Boolean(isTrio),
-      trioSizePrices,
     });
 
     const include = {
@@ -269,13 +272,12 @@ async function update(req, res) {
     });
 
     if (Boolean(isTrio) || updated.isTrio) {
-      const trio = await ensureTrioVariants(updated.id, {
-        trioSizePrices: req.body.trioSizePrices,
-      });
+      const trio = await ensureTrioVariants(updated.id);
       updated = {
-        ...trio.products.find((item) => item.id === updated.id) || updated,
+        ...(trio.products.find((item) => item.id === updated.id) || updated),
         trioVariants: trio.products,
         codes: trio.codes,
+        trioGroupId: trio.trioGroupId,
       };
     }
 
@@ -289,14 +291,15 @@ async function update(req, res) {
 async function expandTrio(req, res) {
   try {
     const { id } = req.params;
-    const trio = await ensureTrioVariants(id, {
-      trioSizePrices: req.body?.trioSizePrices,
-    });
+    const trio = await ensureTrioVariants(id);
     res.json({
-      ...(trio.products[0] || {}),
+      ...(trio.products.find((item) => item.id === Number(id)) ||
+        trio.products[0] ||
+        {}),
       trioVariants: trio.products,
       codes: trio.codes,
       baseCode: trio.baseCode,
+      trioGroupId: trio.trioGroupId,
     });
   } catch (err) {
     console.error(err);

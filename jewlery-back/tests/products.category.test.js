@@ -13,13 +13,12 @@ describe("trio size codes", () => {
     expect(nextCodeForPrefix("br", ["br10p", "br10g"])).toBe("br11");
   });
 
-  test("expandTrioItem creates four variants", () => {
+  test("expandTrioItem creates four linked variants", () => {
     const variants = expandTrioItem({
       name: "Brinco",
       code: "br10",
       isTrio: true,
       grandTotal: "50",
-      trioSizePrices: { m: { grandTotal: "70" } },
     });
 
     expect(variants).toHaveLength(4);
@@ -29,7 +28,13 @@ describe("trio size codes", () => {
       "br10m",
       "br10g",
     ]);
-    expect(variants[2].grandTotal).toBe("70");
+    expect(variants.map((item) => item.trioSize)).toEqual([
+      "BASE",
+      "P",
+      "M",
+      "G",
+    ]);
+    expect(new Set(variants.map((item) => item.trioGroupId)).size).toBe(1);
     expect(variants[2].name).toContain("Médio");
   });
 

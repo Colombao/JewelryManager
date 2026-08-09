@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import prisma from "../../database/prismaClient.js";
 import {
   buildTrioCodes,
@@ -9,6 +10,7 @@ import {
 } from "./products.category.js";
 
 const TRIO_SIZE_SUFFIXES = ["", "P", "M", "G"];
+const TRIO_SIZES = ["BASE", "P", "M", "G"];
 const TRIO_SIZE_LABELS = {
   P: "Pequeno",
   M: "Médio",
@@ -43,9 +45,25 @@ function stripSizeLabel(name) {
     .replace(/\s*\((Pequeno|Médio|Medio|Grande)\)$/i, "");
 }
 
+function resolveCurrentSlot(product) {
+  if (product.trioSize) {
+    const bySize = TRIO_SIZES.indexOf(String(product.trioSize).toUpperCase());
+    if (bySize >= 0) return bySize;
+  }
+  if (isTrioSizeCode(product.code)) {
+    const suffix = product.code.trim().slice(-1).toUpperCase();
+    const bySuffix = TRIO_SIZE_SUFFIXES.indexOf(suffix);
+    if (bySuffix >= 0) return bySuffix;
+  }
+  return 0;
+}
+
 async function findByCodeInsensitive(code) {
   if (!code) return null;
-  const exact = await prisma.product.findFirst({ where: { code } });
+  const exact = await prisma.product.findFirst({
+    where: { code },
+    include: productInclude,
+  });
   if (exact) return exact;
 
   const all = await prisma.product.findMany({
@@ -53,7 +71,7 @@ async function findByCodeInsensitive(code) {
     select: { id: true, code: true },
   });
   const match = all.find(
-    (item) => item.code?.trim().toLowerCase() === code.toLowerCase()
+    (item) => item.code?.trim().toLowerCase() === String(code).toLowerCase()
   );
   if (!match) return null;
   return prisma.product.findUnique({
@@ -69,7 +87,11 @@ async function allocateBaseCode(product) {
 
   if (baseCode && !isTrioSizeCode(product.code)) {
     const conflict = await findByCodeInsensitive(baseCode);
-    if (conflict && conflict.id !== product.id) {
+    if (
+      conflict &&
+      conflict.id !== product.id &&
+      (!product.trioGroupId || conflict.trioGroupId !== product.trioGroupId)
+    ) {
       baseCode = "";
     }
   }
@@ -89,10 +111,10 @@ async function allocateBaseCode(product) {
 }
 
 /**
- * Garante produtos base + P/M/G a partir de um produto marcado como trio.
- * Se o código base estiver duplicado em outro produto, gera um código novo (brXX).
+ * Cria um item novo para BASE/P/M/G e liga todos pelo trioGroupId.
+ * Preço: só copia o do produto origem; cada item é precificado depois à parte.
  */
-async function ensureTrioVariants(productId, { trioSizePrices } = {}) {
+async function ensureTrioVariants(productId) {
   const product = await prisma.product.findUnique({
     where: { id: Number(productId) },
     include: productInclude,
@@ -106,61 +128,56 @@ async function ensureTrioVariants(productId, { trioSizePrices } = {}) {
 
   const baseCode = await allocateBaseCode(product);
   const codes = buildTrioCodes(baseCode);
+  const trioGroupId = product.trioGroupId || randomUUID();
   const baseName = stripSizeLabel(product.name);
   const baseDescription = product.description
     ? stripSizeLabel(product.description)
     : null;
-
-  if (!isTrioSizeCode(product.code)) {
-    await prisma.product.update({
-      where: { id: product.id },
-      data: {
-        code: codes[0],
-        name: baseName,
-        description: baseDescription,
-        barcode: product.barcode?.trim() ? product.barcode : codes[0],
-        isTrio: true,
-      },
-    });
-  } else {
-    await prisma.product.update({
-      where: { id: product.id },
-      data: { isTrio: true },
-    });
-  }
-
-  const sizeKeys = [null, "p", "m", "g"];
+  const currentSlot = resolveCurrentSlot(product);
 
   for (let index = 0; index < codes.length; index++) {
     const code = codes[index];
     const suffix = TRIO_SIZE_SUFFIXES[index];
-    const sizeKey = sizeKeys[index];
-    const sizePrices =
-      sizeKey && trioSizePrices ? trioSizePrices[sizeKey] : undefined;
+    const trioSize = TRIO_SIZES[index];
 
-    const existing = await findByCodeInsensitive(code);
-    if (existing) {
-      if (!existing.isTrio) {
-        await prisma.product.update({
-          where: { id: existing.id },
-          data: { isTrio: true },
-        });
-      }
+    let target = await findByCodeInsensitive(code);
+    if (!target && index === currentSlot) {
+      target = product;
+    }
+
+    const identity = {
+      code,
+      name: suffix ? withSizeName(baseName, suffix) : baseName,
+      description: suffix
+        ? baseDescription
+          ? withSizeName(baseDescription, suffix)
+          : null
+        : baseDescription,
+      sku: suffix ? withSizeSuffix(product.sku, suffix) : product.sku,
+      reference: suffix
+        ? withSizeSuffix(product.reference, suffix)
+        : product.reference,
+      barcode: suffix
+        ? code
+        : product.barcode?.trim()
+          ? product.barcode
+          : code,
+      isTrio: true,
+      trioGroupId,
+      trioSize,
+    };
+
+    if (target) {
+      await prisma.product.update({
+        where: { id: target.id },
+        data: identity,
+      });
       continue;
     }
 
-    if (index === 0) continue;
-
     await prisma.product.create({
       data: {
-        code,
-        sku: withSizeSuffix(product.sku, suffix),
-        reference: withSizeSuffix(product.reference, suffix),
-        barcode: code,
-        name: withSizeName(baseName, suffix),
-        description: baseDescription
-          ? withSizeName(baseDescription, suffix)
-          : null,
+        ...identity,
         image: product.image,
         supplierId: product.supplierId,
         categoryId: product.categoryId,
@@ -168,38 +185,32 @@ async function ensureTrioVariants(productId, { trioSizePrices } = {}) {
         collectionId: product.collectionId,
         quantity: product.quantity ?? 0,
         weight: product.weight,
-        unitPrice: sizePrices?.unitPrice ?? product.unitPrice,
-        totalPrice: sizePrices?.totalPrice ?? product.totalPrice,
+        unitPrice: product.unitPrice,
+        totalPrice: product.totalPrice,
         platingTotal: product.platingTotal,
         piecesTotal: product.piecesTotal,
-        grandTotal: sizePrices?.grandTotal ?? product.grandTotal,
-        priceLevel1: sizePrices?.priceLevel1 ?? product.priceLevel1,
-        priceLevel2: sizePrices?.priceLevel2 ?? product.priceLevel2,
-        priceLevel3: sizePrices?.priceLevel3 ?? product.priceLevel3,
-        adjustedPrice: sizePrices?.adjustedPrice ?? product.adjustedPrice,
-        isTrio: true,
+        grandTotal: product.grandTotal,
+        priceLevel1: product.priceLevel1,
+        priceLevel2: product.priceLevel2,
+        priceLevel3: product.priceLevel3,
+        adjustedPrice: product.adjustedPrice,
         active: product.active ?? true,
       },
     });
   }
 
-  const products = [];
-  for (const code of codes) {
-    const row = await findByCodeInsensitive(code);
-    if (row) {
-      const full = await prisma.product.findUnique({
-        where: { id: row.id },
-        include: productInclude,
-      });
-      if (full) products.push(full);
-    }
-  }
+  const linked = await prisma.product.findMany({
+    where: { trioGroupId },
+    include: productInclude,
+    orderBy: [{ trioSize: "asc" }, { code: "asc" }],
+  });
 
   return {
     baseCode,
     codes,
-    products,
+    trioGroupId,
+    products: linked,
   };
 }
 
-export { ensureTrioVariants };
+export { ensureTrioVariants, TRIO_SIZES };

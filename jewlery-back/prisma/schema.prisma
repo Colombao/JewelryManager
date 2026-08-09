@@ -135,6 +135,10 @@ model Product {
 
   // Controle
   isTrio         Boolean   @default(false)
+  /// UUID compartilhado entre os itens do mesmo trio (base/P/M/G)
+  trioGroupId    String?   @db.VarChar(36)
+  /// Tamanho no trio: BASE | P | M | G
+  trioSize       String?   @db.VarChar(8)
   active         Boolean   @default(true)
 
   createdAt      DateTime  @default(now())
@@ -142,6 +146,8 @@ model Product {
 
   trends         Trend[]
   kitItems       KitItem[]
+
+  @@index([trioGroupId])
 }
 
 model Kit {

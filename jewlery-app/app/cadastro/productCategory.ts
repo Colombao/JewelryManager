@@ -188,21 +188,8 @@ export function assignSequentialCodes<
   });
 }
 
-export type TrioSizePriceFields = {
-  unitPrice?: string | number | null;
-  totalPrice?: string | number | null;
-  grandTotal?: string | number | null;
-  priceLevel1?: string | number | null;
-  priceLevel2?: string | number | null;
-  priceLevel3?: string | number | null;
-  adjustedPrice?: string | number | null;
-};
-
-export type TrioSizePrices = {
-  p?: TrioSizePriceFields;
-  m?: TrioSizePriceFields;
-  g?: TrioSizePriceFields;
-};
+export const TRIO_SIZES = ["BASE", "P", "M", "G"] as const;
+export type TrioSize = (typeof TRIO_SIZES)[number];
 
 function withSizeName(name: string, suffix: TrioSizeSuffix): string {
   if (!suffix) return name;
@@ -218,8 +205,8 @@ function withSizeSuffix(value: string | undefined | null, suffix: TrioSizeSuffix
 }
 
 /**
- * Expande 1 produto trio (código base) em base + P + M + G.
- * Se já for código com sufixo ou não for trio, devolve a linha original.
+ * Expande 1 produto trio (código base) em base + P + M + G,
+ * todos ligados pelo mesmo trioGroupId.
  */
 export function expandTrioItem<
   T extends {
@@ -230,14 +217,8 @@ export function expandTrioItem<
     reference?: string | null;
     barcode?: string | null;
     description?: string | null;
-    unitPrice?: string | number | null;
-    totalPrice?: string | number | null;
-    grandTotal?: string | number | null;
-    priceLevel1?: string | number | null;
-    priceLevel2?: string | number | null;
-    priceLevel3?: string | number | null;
-    adjustedPrice?: string | number | null;
-    trioSizePrices?: TrioSizePrices;
+    trioGroupId?: string | null;
+    trioSize?: string | null;
   }
 >(item: T): T[] {
   if (!item.isTrio || !item.code?.trim() || isTrioSizeCode(item.code)) {
@@ -245,41 +226,36 @@ export function expandTrioItem<
   }
 
   const codes = buildTrioCodes(item.code);
-  const sizeKeys = [null, "p", "m", "g"] as const;
+  const trioGroupId =
+    item.trioGroupId ||
+    (typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `trio-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
   return codes.map((code, index) => {
     const suffix = TRIO_SIZE_SUFFIXES[index];
-    const sizeKey = sizeKeys[index];
-    const sizePrices =
-      sizeKey && item.trioSizePrices
-        ? item.trioSizePrices[sizeKey]
-        : undefined;
-
-    const priced = {
-      unitPrice: sizePrices?.unitPrice ?? item.unitPrice,
-      totalPrice: sizePrices?.totalPrice ?? item.totalPrice,
-      grandTotal: sizePrices?.grandTotal ?? item.grandTotal,
-      priceLevel1: sizePrices?.priceLevel1 ?? item.priceLevel1,
-      priceLevel2: sizePrices?.priceLevel2 ?? item.priceLevel2,
-      priceLevel3: sizePrices?.priceLevel3 ?? item.priceLevel3,
-      adjustedPrice: sizePrices?.adjustedPrice ?? item.adjustedPrice,
-    };
+    const trioSize = TRIO_SIZES[index];
 
     return {
       ...item,
-      ...priced,
       code,
-      name: withSizeName(item.name, suffix),
-      description: item.description
-        ? withSizeName(item.description, suffix)
-        : item.description,
-      sku: withSizeSuffix(item.sku, suffix),
-      reference: withSizeSuffix(item.reference, suffix),
-      barcode: item.barcode?.trim()
-        ? withSizeSuffix(item.barcode, suffix)
-        : code,
+      name: suffix ? withSizeName(item.name, suffix) : item.name,
+      description:
+        suffix && item.description
+          ? withSizeName(item.description, suffix)
+          : item.description,
+      sku: suffix ? withSizeSuffix(item.sku, suffix) : item.sku,
+      reference: suffix
+        ? withSizeSuffix(item.reference, suffix)
+        : item.reference,
+      barcode: suffix
+        ? code
+        : item.barcode?.trim()
+          ? item.barcode
+          : code,
       isTrio: true,
-      trioSizePrices: undefined,
+      trioGroupId,
+      trioSize,
     };
   });
 }

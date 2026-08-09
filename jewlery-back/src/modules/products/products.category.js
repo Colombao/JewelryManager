@@ -1,3 +1,5 @@
+import { randomUUID } from "crypto";
+
 const CATEGORY_RULES = [
   {
     label: "Brinco",
@@ -81,6 +83,7 @@ function getCodePrefixForCategory(categoryName) {
 }
 
 const TRIO_SIZE_SUFFIXES = ["", "P", "M", "G"];
+const TRIO_SIZES = ["BASE", "P", "M", "G"];
 const TRIO_SIZE_LABELS = {
   P: "Pequeno",
   M: "Médio",
@@ -153,34 +156,31 @@ function expandTrioItem(item) {
   }
 
   const codes = buildTrioCodes(item.code);
-  const sizeKeys = [null, "p", "m", "g"];
+  const trioGroupId = item.trioGroupId || randomUUID();
 
   return codes.map((code, index) => {
     const suffix = TRIO_SIZE_SUFFIXES[index];
-    const sizeKey = sizeKeys[index];
-    const sizePrices =
-      sizeKey && item.trioSizePrices ? item.trioSizePrices[sizeKey] : undefined;
+    const trioSize = TRIO_SIZES[index];
 
     return {
       ...item,
-      unitPrice: sizePrices?.unitPrice ?? item.unitPrice,
-      totalPrice: sizePrices?.totalPrice ?? item.totalPrice,
-      grandTotal: sizePrices?.grandTotal ?? item.grandTotal,
-      priceLevel1: sizePrices?.priceLevel1 ?? item.priceLevel1,
-      priceLevel2: sizePrices?.priceLevel2 ?? item.priceLevel2,
-      priceLevel3: sizePrices?.priceLevel3 ?? item.priceLevel3,
-      adjustedPrice: sizePrices?.adjustedPrice ?? item.adjustedPrice,
       code,
-      name: withSizeName(item.name, suffix),
-      description: item.description
+      name: suffix ? withSizeName(item.name, suffix) : item.name,
+      description: suffix && item.description
         ? withSizeName(item.description, suffix)
         : item.description,
-      sku: withSizeSuffix(item.sku, suffix),
-      reference: withSizeSuffix(item.reference, suffix),
-      barcode: item.barcode?.trim?.()
-        ? withSizeSuffix(item.barcode, suffix)
-        : code,
+      sku: suffix ? withSizeSuffix(item.sku, suffix) : item.sku,
+      reference: suffix
+        ? withSizeSuffix(item.reference, suffix)
+        : item.reference,
+      barcode: suffix
+        ? code
+        : item.barcode?.trim?.()
+          ? item.barcode
+          : code,
       isTrio: true,
+      trioGroupId,
+      trioSize,
       trioSizePrices: undefined,
     };
   });

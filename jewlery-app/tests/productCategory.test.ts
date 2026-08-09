@@ -90,18 +90,12 @@ describe("trio size codes", () => {
     expect(isTrioSizeCode("br10")).toBe(false);
   });
 
-  it("expands trio into four products with optional size prices", () => {
+  it("expands trio into four linked products (BASE/P/M/G)", () => {
     const items = expandTrioItem({
       name: "Brinco Argola",
       code: "br10",
       isTrio: true,
       reference: "REF1",
-      grandTotal: "100.00",
-      priceLevel1: "200.00",
-      trioSizePrices: {
-        p: { grandTotal: "80.00", priceLevel1: "160.00" },
-        g: { grandTotal: "120.00", priceLevel1: "240.00" },
-      },
     });
 
     expect(items.map((item) => item.code)).toEqual([
@@ -110,13 +104,17 @@ describe("trio size codes", () => {
       "br10m",
       "br10g",
     ]);
+    expect(items.map((item) => item.trioSize)).toEqual([
+      "BASE",
+      "P",
+      "M",
+      "G",
+    ]);
+    expect(new Set(items.map((item) => item.trioGroupId)).size).toBe(1);
+    expect(items[0].name).toBe("Brinco Argola");
     expect(items[1].name).toBe("Brinco Argola (Pequeno)");
     expect(items[2].name).toBe("Brinco Argola (Médio)");
     expect(items[3].name).toBe("Brinco Argola (Grande)");
-    expect(items[1].grandTotal).toBe("80.00");
-    expect(items[1].priceLevel1).toBe("160.00");
-    expect(items[2].grandTotal).toBe("100.00");
-    expect(items[3].grandTotal).toBe("120.00");
     expect(items[1].reference).toBe("REF1-P");
   });
 
