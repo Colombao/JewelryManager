@@ -20,9 +20,9 @@ No BarTender Designer, para cada objeto da etiqueta:
 
 1. Abra as propriedades da fonte de dados
 2. Troque de “Dados inseridos” / valor fixo para:
-   - **Campo de banco de texto** `Codigo`, `Nome`, `SKU`, `Preco`, `Barcode`, `Categoria`  
+   - **Campo de banco de texto** `code`, `name`, `sku`, `price`, `barcode`, `category`  
      (o CRM cria/substitui o “Text File 1” com esses nomes), **ou**
-   - **Named Data Source** com exatamente esses nomes
+   - **Named Data Source** com exatamente esses nomes (não use `Codigo`/`Preco`)
 3. Salve o `Documento2.btw`
 
 ## Pasta no PC

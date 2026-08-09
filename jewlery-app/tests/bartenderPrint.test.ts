@@ -56,9 +56,12 @@ describe("listProductLabelTypes", () => {
 });
 
 describe("batch payload", () => {
-  it("builds one RecordSet CSV with each selected code", () => {
+  it("builds one RecordSet CSV with English field names (code, price)", () => {
     const csv = buildRecordSetCsv([br13, br14, br15]);
-    expect(csv).toContain("Codigo");
+    expect(csv).toContain("code");
+    expect(csv).toContain("price");
+    expect(csv).not.toContain("Codigo");
+    expect(csv).not.toContain("Preco");
     expect(csv).toContain("BR13");
     expect(csv).toContain("BR14");
     expect(csv).toContain("BR15");
@@ -92,9 +95,10 @@ describe("batch payload", () => {
     expect(xml).toContain("<Value>BR14</Value>");
   });
 
-  it("maps Codigo to the product code", () => {
-    expect(buildNamedDataSources(br13).Codigo).toBe("BR13");
-    expect(buildNamedDataSources(br14).Codigo).toBe("BR14");
+  it("maps code/price field names used by the .btw", () => {
+    expect(buildNamedDataSources(br13).code).toBe("BR13");
+    expect(buildNamedDataSources(br14).code).toBe("BR14");
+    expect(buildNamedDataSources(br13).price).toMatch(/29/);
   });
 });
 

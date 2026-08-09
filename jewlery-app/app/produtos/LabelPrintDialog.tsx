@@ -421,7 +421,7 @@ export default function LabelPrintDialog({
             </ul>
             {previewProduct && previewFields && (
               <dl className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-slate-100 pt-2 text-xs sm:grid-cols-3">
-                {["Codigo", "Nome", "SKU", "Preco", "Barcode", "Categoria"].map(
+                {["code", "name", "sku", "price", "barcode", "category"].map(
                   (key) => (
                     <div key={key} className="min-w-0">
                       <dt className="text-slate-400">{key}</dt>
@@ -604,14 +604,15 @@ export default function LabelPrintDialog({
               </div>
 
               <p className="text-[11px] leading-relaxed text-slate-400">
-                Se todas as etiquetas saem como{" "}
-                <span className="font-mono">BR01</span>, o texto no .btw ainda
-                está fixo. No BarTender, ligue o objeto do código ao campo{" "}
-                <span className="font-mono">Codigo</span> (banco de texto / Named
-                Data Source). Mesmo para{" "}
-                <span className="font-mono">Nome</span>,{" "}
-                <span className="font-mono">SKU</span>,{" "}
-                <span className="font-mono">Preco</span>.
+                Campos enviados ao .btw:{" "}
+                <span className="font-mono">code</span>,{" "}
+                <span className="font-mono">name</span>,{" "}
+                <span className="font-mono">sku</span>,{" "}
+                <span className="font-mono">price</span>,{" "}
+                <span className="font-mono">barcode</span>,{" "}
+                <span className="font-mono">category</span>. Se ainda sair{" "}
+                <span className="font-mono">BR01</span>, confira no BarTender se
+                o objeto usa exatamente esses nomes.
               </p>
             </div>
           )}

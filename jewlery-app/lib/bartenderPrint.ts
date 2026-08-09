@@ -47,20 +47,21 @@ export type BartenderProductField =
 
 export type BartenderFieldMap = Record<string, BartenderProductField>;
 
-export const BARTENDER_SETTINGS_STORAGE_KEY = "jewlery.bartenderPrint.settings";
+export const BARTENDER_SETTINGS_STORAGE_KEY =
+  "jewlery.bartenderPrint.settings.v2";
 
 /**
  * Column / Named Data Source names sent to Documento2.btw.
- * In BarTender, point each label object to these names (or rename to match).
+ * Must match the field names in the .btw (code, price — not Codigo/Preco).
  */
 export const DEFAULT_BARTENDER_FIELD_MAP: BartenderFieldMap = {
-  Codigo: "code",
-  Nome: "name",
-  SKU: "sku",
-  Referencia: "reference",
-  Barcode: "barcode",
-  Preco: "priceFormatted",
-  Categoria: "category",
+  code: "code",
+  name: "name",
+  sku: "sku",
+  reference: "reference",
+  barcode: "barcode",
+  price: "priceFormatted",
+  category: "category",
 };
 
 export function getDefaultBartenderSettings(): BartenderPrintSettings {
@@ -348,7 +349,7 @@ ${printerXml}        <IdenticalCopiesOfLabel>${copies}</IdenticalCopiesOfLabel>
 
 /**
  * Fallback: still ONE HTTP request, but one Print per product with NamedSubString.
- * Use when the .btw has Named Data Sources (Codigo, Nome…) instead of a DB.
+ * Use when the .btw has Named Data Sources (code, name, price…) instead of a DB.
  */
 export function buildNamedSubstringBatchBTXML(
   products: LabelProduct[],
