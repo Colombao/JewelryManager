@@ -211,14 +211,8 @@ export default function LabelPrintDialog({
       });
 
       if (result.printed > 0) {
-        const codes = selectedProducts
-          .slice(0, 3)
-          .map((p) => p.code || p.sku || p.name)
-          .join(", ");
         toast.success(
-          `${result.printed} etiqueta${result.printed === 1 ? "" : "s"}: ${codes}${
-            selectedProducts.length > 3 ? "…" : ""
-          }`
+          `${result.printed} produto(s) em 1 envio — ${printRows.join(" · ")}`
         );
       }
 
