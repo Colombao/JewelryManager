@@ -19,6 +19,10 @@ Crie `.env.local`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3001
+# Opcional — impressão local de etiquetas (BarTender neste PC)
+# NEXT_PUBLIC_BARTENDER_API_URL=http://localhost:5159
+# NEXT_PUBLIC_BARTENDER_DOCUMENT=C:\Etiquetas\Documento2.btw
+# NEXT_PUBLIC_BARTENDER_PRINTER=Argox OS-214 plus series PPLA
 ```
 
 ### 3. Desenvolvimento
@@ -45,7 +49,7 @@ npm start
 | `/` | Login do administrador | Público |
 | `/dashboard` | KPIs de estoque, kits e acertos | Admin |
 | `/fluxo` | Kanban do fluxo comercial (boards, cards, negócios) | Admin |
-| `/produtos` | Listagem e gestão de produtos | Admin |
+| `/produtos` | Catálogo de produtos + impressão de etiquetas (BarTender local) | Admin |
 | `/cadastro` | Cadastro/edição de produtos e importação via planilha | Admin |
 | `/kit` | Montagem de kit comercial | Admin |
 | `/kits` | Kits montados e histórico | Admin |
@@ -96,6 +100,11 @@ Exemplos de endpoints consumidos:
 - `pricing.ts` — margens, comissões e formatação de preços
 - `business.ts` — tipos do fluxo comercial
 - `settlement.ts` — acertos, pagamentos e status
+- `bartenderPrint.ts` — impressão local via BarTender Actions API (`localhost:5159`)
+
+## Etiquetas (BarTender)
+
+Na tela `/produtos`, o botão **Imprimir etiquetas** abre um diálogo para filtrar por tipo (Brinco, Pulseira, etc.), selecionar produtos/cópias e enviar o job ao BarTender instalado **no mesmo PC** (com a Argox conectada). O template fica em [`docs/labels/Documento2.btw`](../docs/labels/Documento2.btw) — veja [`docs/labels/README.md`](../docs/labels/README.md).
 
 ## Importação de produtos
 

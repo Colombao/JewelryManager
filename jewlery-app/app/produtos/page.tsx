@@ -9,8 +9,10 @@ import {
   parsePrice,
   resolveImageUrl,
 } from "@/app/kit/kitUtils";
+import Button from "../components/Button";
 import MainLayout from "../components/MainLayout";
 import RequireAuth from "../components/RequireAuth";
+import LabelPrintDialog from "./LabelPrintDialog";
 
 interface NamedItem {
   id: number;
@@ -21,6 +23,8 @@ interface Product {
   id: number;
   code: string | null;
   sku: string | null;
+  reference: string | null;
+  barcode: string | null;
   name: string;
   description: string | null;
   image: string | null;
@@ -420,6 +424,7 @@ export default function Produtos() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
+  const [printOpen, setPrintOpen] = useState(false);
 
   const closePreview = useCallback(() => setPreviewProduct(null), []);
 
@@ -490,13 +495,23 @@ export default function Produtos() {
       <MainLayout>
         <div className="min-h-screen bg-slate-100 p-4 sm:p-6">
           <div className="mx-auto max-w-7xl">
-            <div className="mb-6">
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                Catálogo de Produtos
-              </h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Consulta de estoque, preços por nível e kits vinculados
-              </p>
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                  Catálogo de Produtos
+                </h1>
+                <p className="mt-1 text-sm text-slate-500">
+                  Consulta de estoque, preços por nível e kits vinculados
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={() => setPrintOpen(true)}
+                disabled={isLoading || products.length === 0}
+                className="shrink-0"
+              >
+                Imprimir etiquetas
+              </Button>
             </div>
 
             <div className="mb-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
@@ -583,6 +598,12 @@ export default function Produtos() {
             onClose={closePreview}
           />
         )}
+
+        <LabelPrintDialog
+          open={printOpen}
+          products={products}
+          onClose={() => setPrintOpen(false)}
+        />
       </MainLayout>
     </RequireAuth>
   );
