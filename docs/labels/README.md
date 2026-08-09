@@ -1,26 +1,40 @@
 # Etiquetas BarTender
 
-Template usado pelo CRM na tela **Produtos → Imprimir etiquetas**:
+Template: `Documento2.btw` — BarTender 2022 Enterprise, 48,7 × 15 mm, **2 templates** (2 produtos por linha), Argox OS-214.
 
-- `Documento2.btw` — BarTender 2022 Enterprise, 48,7 × 15 mm, impressora Argox OS-214 (PPLA)
+## Como o CRM imprime
 
-## Instalação no PC que imprime
+Na tela **Produtos → Imprimir etiquetas**, ao marcar ex. BR13, BR14 e BR15:
 
-1. Instale o **BarTender** (Automation/Enterprise) com a API local na porta `5159`.
-2. Copie `Documento2.btw` para um caminho fixo, por exemplo `C:\Etiquetas\Documento2.btw`.
-3. Abra o documento no BarTender e garanta que as **Named Data Sources** existam (ou renomeie as do formulário) para bater com o app:
-   - `Nome`, `Codigo`, `SKU`, `Preco`, `Barcode`, `Categoria` (também são enviados aliases em inglês)
-4. Conecte a Argox e deixe-a como impressora do documento (ou informe o nome no diálogo do CRM).
-5. No CRM (`/produtos`), clique em **Imprimir etiquetas**, escolha o tipo (Brinco, Pulseira, …), marque os produtos e imprima.
+1. O app monta **um único request** ao BarTender (`localhost:5159`)
+2. Envia os 3 registros juntos (CSV / RecordSet)
+3. Com 2 templates, a impressora deve sair assim:
+   - Linha 1: **BR13 | BR14**
+   - Linha 2: **BR15**
 
-As configurações de caminho/API/impressora ficam salvas no `localStorage` desse navegador.
+## Configuração obrigatória no .btw (senão sai tudo BR01)
 
-## Variáveis de ambiente (opcional)
+Se o texto do código estiver **fixo** no documento (valor de exemplo `BR01`), o BarTender ignora os dados do CRM.
 
-No `jewlery-app/.env.local`:
+No BarTender Designer, para cada objeto da etiqueta:
+
+1. Abra as propriedades da fonte de dados
+2. Troque de “Dados inseridos” / valor fixo para:
+   - **Campo de banco de texto** `Codigo`, `Nome`, `SKU`, `Preco`, `Barcode`, `Categoria`  
+     (o CRM cria/substitui o “Text File 1” com esses nomes), **ou**
+   - **Named Data Source** com exatamente esses nomes
+3. Salve o `Documento2.btw`
+
+## Pasta no PC
+
+1. BarTender Enterprise com API na porta `5159`
+2. `Documento2.btw` em uma pasta fixa (ex.: `C:\Users\AlmaW\Desktop\bartender\Documento2.btw`)
+3. No CRM: **Selecionar arquivo .btw** + confirmar a pasta
+
+## Variáveis (opcional)
 
 ```env
 NEXT_PUBLIC_BARTENDER_API_URL=http://localhost:5159
-NEXT_PUBLIC_BARTENDER_DOCUMENT=C:\Etiquetas\Documento2.btw
+NEXT_PUBLIC_BARTENDER_DOCUMENT=C:\Users\AlmaW\Desktop\bartender\Documento2.btw
 NEXT_PUBLIC_BARTENDER_PRINTER=Argox OS-214 plus series PPLA
 ```

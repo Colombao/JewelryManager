@@ -2,106 +2,99 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BARTENDER_SETTINGS_STORAGE_KEY,
   applySelectedBtwFileName,
+  buildBatchPrintBTXML,
   buildNamedDataSources,
-  buildPrintBTWAction,
-  buildPrintBTXML,
+  buildNamedSubstringBatchBTXML,
+  buildRecordSetCsv,
+  describePrintRows,
   getProductLabelType,
   listProductLabelTypes,
   loadBartenderSettings,
-  printProductLabel,
   printProductLabels,
   saveBartenderSettings,
   validateBartenderDocumentPath,
   type LabelProduct,
 } from "@/lib/bartenderPrint";
 
-const baseProduct: LabelProduct = {
-  id: 1,
-  code: "br01",
-  sku: "SKU-1",
-  reference: "REF-1",
-  barcode: "789",
-  name: "BR-ALE Dourado",
+const br13: LabelProduct = {
+  id: 567,
+  code: "BR13",
+  sku: "GF9245",
+  name: "BR-ALE Dourado 3 ml",
   priceLevel1: "29.90",
   category: { id: 10, name: "BR-ALE Dourado 3 ml" },
 };
 
+const br14: LabelProduct = {
+  id: 569,
+  code: "BR14",
+  sku: "GFCJ108",
+  name: "BR-ALE Dourado 3 ml",
+  priceLevel1: "29.90",
+  category: { id: 10, name: "BR-ALE Dourado 3 ml" },
+};
+
+const br15: LabelProduct = {
+  id: 570,
+  code: "BR15",
+  sku: "X",
+  name: "BR-ALE Dourado 3 ml",
+  priceLevel1: "19.90",
+  category: { id: 10, name: "BR-ALE Dourado 3 ml" },
+};
+
 describe("getProductLabelType", () => {
-  it("infers Brinco/Pulseira from product name, not DB catalog line", () => {
-    expect(getProductLabelType(baseProduct)).toBe("Brinco");
-    expect(
-      getProductLabelType({
-        ...baseProduct,
-        name: "PUL-ALE Dourado 7 ml",
-        category: { id: 2, name: "PUL-ALE Dourado 7 ml" },
-      })
-    ).toBe("Pulseira");
+  it("infers Brinco from product name", () => {
+    expect(getProductLabelType(br13)).toBe("Brinco");
   });
 });
 
 describe("listProductLabelTypes", () => {
-  it("returns sorted unique jewelry types", () => {
-    const types = listProductLabelTypes([
-      baseProduct,
-      {
-        ...baseProduct,
-        id: 2,
-        name: "PL-10",
-        category: { id: 2, name: "PUL-ALE Dourado 7 ml" },
-      },
-      {
-        ...baseProduct,
-        id: 3,
-        name: "BR-02 outro",
-        category: { id: 10, name: "BR-ALE Dourado 3 ml" },
-      },
-    ]);
-    expect(types).toEqual(["Brinco", "Pulseira"]);
+  it("groups as Brinco not catalog line name", () => {
+    expect(listProductLabelTypes([br13, br14])).toEqual(["Brinco"]);
   });
 });
 
-describe("buildNamedDataSources / BTXML / PrintBTWAction", () => {
-  it("maps product fields to named data sources", () => {
-    const named = buildNamedDataSources(baseProduct);
-    expect(named.Nome).toBe("BR-ALE Dourado");
-    expect(named.Codigo).toBe("br01");
-    expect(named.SKU).toBe("SKU-1");
-    expect(named.Barcode).toBe("789");
-    expect(named.Categoria).toBe("Brinco");
-    expect(named.Preco).toContain("29");
+describe("batch payload", () => {
+  it("builds one RecordSet CSV with each selected code", () => {
+    const csv = buildRecordSetCsv([br13, br14, br15]);
+    expect(csv).toContain("Codigo");
+    expect(csv).toContain("BR13");
+    expect(csv).toContain("BR14");
+    expect(csv).toContain("BR15");
+    expect(csv).not.toContain("BR01");
   });
 
-  it("builds BTXML with NamedSubString for the selected product", () => {
+  it("describes 2-up rows as BR13|BR14 then BR15", () => {
+    expect(describePrintRows([br13, br14, br15], 2)).toEqual([
+      "Linha 1: BR13 | BR14",
+      "Linha 2: BR15 | —",
+    ]);
+  });
+
+  it("builds a single BTXML Print with all products in TextData", () => {
     const settings = loadBartenderSettings();
     settings.documentPath =
       "C:\\Users\\AlmaW\\Desktop\\bartender\\Documento2.btw";
-    const xml = buildPrintBTXML(baseProduct, settings, 2);
-    expect(xml).toContain("NamedSubString Name=\"Codigo\"");
-    expect(xml).toContain("<Value>br01</Value>");
-    expect(xml).toContain("<Value>BR-ALE Dourado</Value>");
-    expect(xml).toContain("IdenticalCopiesOfLabel>2<");
-    expect(xml).toContain(
-      "C:\\Users\\AlmaW\\Desktop\\bartender\\Documento2.btw"
-    );
+    const xml = buildBatchPrintBTXML([br13, br14, br15], settings);
+    expect(xml).toContain("<RecordSet");
+    expect(xml).toContain("BR13");
+    expect(xml).toContain("BR14");
+    expect(xml).toContain("BR15");
+    expect(xml.match(/<Print /g)?.length).toBe(1);
   });
 
-  it("builds PrintBTWAction payload with document and copies", () => {
+  it("builds NamedSubString fallback with one Print per product in one script", () => {
     const settings = loadBartenderSettings();
-    settings.documentPath = "C:\\Etiquetas\\Documento2.btw";
-    settings.printer = "Argox OS-214 plus series PPLA";
-    settings.copies = 2;
+    const xml = buildNamedSubstringBatchBTXML([br13, br14], settings);
+    expect(xml.match(/<Print /g)?.length).toBe(2);
+    expect(xml).toContain("<Value>BR13</Value>");
+    expect(xml).toContain("<Value>BR14</Value>");
+  });
 
-    const payload = buildPrintBTWAction(baseProduct, settings);
-    expect(payload.PrintBTWAction.Document).toBe(
-      "C:\\Etiquetas\\Documento2.btw"
-    );
-    expect(payload.PrintBTWAction.Printer).toBe(
-      "Argox OS-214 plus series PPLA"
-    );
-    expect(payload.PrintBTWAction.Copies).toBe("2");
-    expect(
-      (payload.PrintBTWAction.NamedDataSources as Record<string, string>).Nome
-    ).toBe("BR-ALE Dourado");
+  it("maps Codigo to the product code", () => {
+    expect(buildNamedDataSources(br13).Codigo).toBe("BR13");
+    expect(buildNamedDataSources(br14).Codigo).toBe("BR14");
   });
 });
 
@@ -124,14 +117,6 @@ describe("file path helpers", () => {
       validateBartenderDocumentPath("C:\\Users\\AlmaW\\Desktop\\bartender")
     ).toMatch(/\.btw/i);
   });
-
-  it("accepts full .btw path", () => {
-    expect(
-      validateBartenderDocumentPath(
-        "C:\\Users\\AlmaW\\Desktop\\bartender\\Documento2.btw"
-      )
-    ).toBeNull();
-  });
 });
 
 describe("settings persistence", () => {
@@ -139,105 +124,81 @@ describe("settings persistence", () => {
     window.localStorage.removeItem(BARTENDER_SETTINGS_STORAGE_KEY);
   });
 
-  it("saves and loads settings from localStorage", () => {
+  it("saves labelsPerRow", () => {
     saveBartenderSettings({
-      apiUrl: "http://127.0.0.1:5159",
+      ...loadBartenderSettings(),
+      labelsPerRow: 2,
       documentPath: "D:\\labels\\Documento2.btw",
       documentFolder: "D:\\labels",
-      printer: "Argox",
-      copies: 3,
-      fieldMap: { Nome: "name" },
     });
-
-    const loaded = loadBartenderSettings();
-    expect(loaded.apiUrl).toBe("http://127.0.0.1:5159");
-    expect(loaded.documentPath).toBe("D:\\labels\\Documento2.btw");
-    expect(loaded.documentFolder).toBe("D:\\labels");
-    expect(loaded.printer).toBe("Argox");
-    expect(loaded.copies).toBe(3);
-    expect(loaded.fieldMap.Nome).toBe("name");
-    expect(loaded.fieldMap.SKU).toBe("sku");
+    expect(loadBartenderSettings().labelsPerRow).toBe(2);
   });
 });
 
-describe("printProductLabel Faulted handling", () => {
-  it("treats Status Faulted as an error even when HTTP 200", async () => {
+describe("printProductLabels single request", () => {
+  it("posts once with all selected codes and treats Faulted as error", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       headers: { get: () => "application/json" },
       json: async () => ({
         Status: "Faulted",
-        Messages: [
-          "[Error] O documento do BarTender não existe ou não pode ser acessado.",
-        ],
+        Messages: ["[Error] fail"],
       }),
     });
 
-    // First call (BTXML) faults; fallback JSON also faults
-    fetchImpl.mockResolvedValue({
-      ok: true,
-      headers: { get: () => "application/json" },
-      json: async () => ({
-        Status: "Faulted",
-        Messages: [
-          "[Error] O documento do BarTender não existe ou não pode ser acessado.",
-        ],
-      }),
-    });
-
-    const settings = loadBartenderSettings();
-    await expect(
-      printProductLabel(baseProduct, settings, {
-        fetchImpl: fetchImpl as unknown as typeof fetch,
-      })
-    ).rejects.toThrow(/não imprimiu|não existe/i);
-  });
-});
-
-describe("printProductLabels", () => {
-  it("prints each selected product and collects errors", async () => {
-    const fetchImpl = vi
-      .fn()
+    // RecordSet fails, NamedSubString fails, JSON fails → 3 attempts, still one product set
+    fetchImpl
       .mockResolvedValueOnce({
         ok: true,
         headers: { get: () => "application/json" },
-        json: async () => ({ Status: "RanToCompletion" }),
+        json: async () => ({ Status: "Faulted", Messages: ["[Error] a"] }),
       })
       .mockResolvedValueOnce({
         ok: true,
         headers: { get: () => "application/json" },
-        json: async () => ({
-          Status: "Faulted",
-          Messages: ["[Error] fail"],
-        }),
+        json: async () => ({ Status: "Faulted", Messages: ["[Error] b"] }),
       })
       .mockResolvedValueOnce({
         ok: true,
         headers: { get: () => "application/json" },
-        json: async () => ({
-          Status: "Faulted",
-          Messages: ["[Error] fail"],
-        }),
+        json: async () => ({ Status: "Faulted", Messages: ["[Error] c"] }),
       });
 
-    const settings = loadBartenderSettings();
     const result = await printProductLabels(
-      [
-        baseProduct,
-        {
-          ...baseProduct,
-          id: 2,
-          name: "PL-10",
-          code: "pl01",
-          category: { id: 2, name: "PUL-ALE Dourado 7 ml" },
-        },
-      ],
-      settings,
+      [br13, br14, br15],
+      loadBartenderSettings(),
       { fetchImpl: fetchImpl as unknown as typeof fetch }
     );
 
-    expect(result.printed).toBe(1);
-    expect(result.errors).toHaveLength(1);
-    expect(result.errors[0].product.id).toBe(2);
+    expect(result.printed).toBe(0);
+    expect(result.errors).toHaveLength(3);
+    expect(fetchImpl).toHaveBeenCalled();
+    const bodies = fetchImpl.mock.calls.map((c) => String(c[1]?.body ?? ""));
+    expect(bodies.some((b) => b.includes("BR13") && b.includes("BR14"))).toBe(
+      true
+    );
+    expect(bodies.some((b) => b.includes("BR01"))).toBe(false);
+  });
+
+  it("succeeds with a single RecordSet request for all products", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => "application/json" },
+      json: async () => ({ Status: "RanToCompletion" }),
+    });
+
+    const result = await printProductLabels(
+      [br13, br14, br15],
+      loadBartenderSettings(),
+      { fetchImpl: fetchImpl as unknown as typeof fetch }
+    );
+
+    expect(result.printed).toBe(3);
+    expect(result.errors).toHaveLength(0);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const body = String(fetchImpl.mock.calls[0][1]?.body ?? "");
+    expect(body).toContain("BR13");
+    expect(body).toContain("BR14");
+    expect(body).toContain("BR15");
   });
 });

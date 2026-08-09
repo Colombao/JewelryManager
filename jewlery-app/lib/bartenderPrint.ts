@@ -18,13 +18,16 @@ export interface LabelProduct {
 
 export interface BartenderPrintSettings {
   apiUrl: string;
-  /** Full path to the .btw file on the local Windows PC */
   documentPath: string;
-  /** Directory that contains the .btw (used with file picker) */
   documentFolder: string;
   printer: string;
   copies: number;
-  /** Named data source / NamedSubString names in the .btw → product field keys */
+  /**
+   * Products per physical row on the label (Documento2 has 2 templates → 2).
+   * Used for preview text; the RecordSet print lets BarTender place consecutive
+   * records on the same row automatically.
+   */
+  labelsPerRow: number;
   fieldMap: BartenderFieldMap;
 }
 
@@ -47,27 +50,17 @@ export type BartenderFieldMap = Record<string, BartenderProductField>;
 export const BARTENDER_SETTINGS_STORAGE_KEY = "jewlery.bartenderPrint.settings";
 
 /**
- * Default Named Data Source / NamedSubString names sent to Documento2.btw.
- * Rename the sources in BarTender to match, or edit this map in settings.
+ * Column / Named Data Source names sent to Documento2.btw.
+ * In BarTender, point each label object to these names (or rename to match).
  */
 export const DEFAULT_BARTENDER_FIELD_MAP: BartenderFieldMap = {
-  Nome: "name",
-  Name: "name",
   Codigo: "code",
-  Code: "code",
+  Nome: "name",
   SKU: "sku",
-  Sku: "sku",
   Referencia: "reference",
-  Reference: "reference",
   Barcode: "barcode",
-  CodigoBarras: "barcode",
-  Categoria: "category",
-  Category: "category",
-  Tipo: "category",
   Preco: "priceFormatted",
-  Preco1: "priceFormatted",
-  Price: "priceFormatted",
-  PriceLevel1: "priceLevel1Raw",
+  Categoria: "category",
 };
 
 export function getDefaultBartenderSettings(): BartenderPrintSettings {
@@ -82,6 +75,7 @@ export function getDefaultBartenderSettings(): BartenderPrintSettings {
     documentFolder: folderFromDocumentPath(documentPath),
     printer: process.env.NEXT_PUBLIC_BARTENDER_PRINTER?.trim() || "",
     copies: 1,
+    labelsPerRow: 2,
     fieldMap: { ...DEFAULT_BARTENDER_FIELD_MAP },
   };
 }
@@ -110,7 +104,6 @@ export function joinWindowsPath(folder: string, fileName: string): string {
   return `${dir}${sep}${name}`;
 }
 
-/** Apply a picked .btw file name onto the remembered folder / path. */
 export function applySelectedBtwFileName(
   settings: Pick<BartenderPrintSettings, "documentPath" | "documentFolder">,
   fileName: string
@@ -147,12 +140,17 @@ export function loadBartenderSettings(): BartenderPrintSettings {
       parsed.documentFolder?.trim() ||
       folderFromDocumentPath(documentPath) ||
       defaults.documentFolder;
+    const labelsPerRow =
+      typeof parsed.labelsPerRow === "number" && parsed.labelsPerRow > 0
+        ? Math.min(4, Math.floor(parsed.labelsPerRow))
+        : defaults.labelsPerRow;
 
     return {
       ...defaults,
       ...parsed,
       documentPath,
       documentFolder,
+      labelsPerRow,
       fieldMap: {
         ...defaults.fieldMap,
         ...(parsed.fieldMap ?? {}),
@@ -175,10 +173,7 @@ export function saveBartenderSettings(settings: BartenderPrintSettings) {
   );
 }
 
-/** Jewelry type for label printing (Brinco, Pulseira…), inferred from the name. */
 export function getProductLabelType(product: LabelProduct): string {
-  // DB category is often the catalog line name (e.g. "BR-ALE Dourado 3 ml"),
-  // not Brinco/Pulseira — always derive the type from the product name.
   return extractCategoryName(product.name);
 }
 
@@ -191,9 +186,10 @@ export function listProductLabelTypes(products: LabelProduct[]): string[] {
 }
 
 function resolveProductField(
-  product: LabelProduct,
+  product: LabelProduct | null | undefined,
   field: BartenderProductField
 ): string {
+  if (!product) return "";
   switch (field) {
     case "name":
       return product.name ?? "";
@@ -247,6 +243,26 @@ export function buildNamedDataSources(
   return named;
 }
 
+export function chunkProducts<T>(items: T[], size: number): T[][] {
+  const n = Math.max(1, Math.floor(size || 1));
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += n) {
+    rows.push(items.slice(i, i + n));
+  }
+  return rows;
+}
+
+export function describePrintRows(
+  products: LabelProduct[],
+  labelsPerRow: number
+): string[] {
+  return chunkProducts(products, labelsPerRow).map((row, index) => {
+    const codes = row.map((p) => p.code || p.sku || `#${p.id}`);
+    while (codes.length < Math.max(1, labelsPerRow)) codes.push("—");
+    return `Linha ${index + 1}: ${codes.join(" | ")}`;
+  });
+}
+
 function escapeXml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -256,41 +272,169 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-/** Classic BTXML — NamedSubString is the most reliable way to fill label fields. */
-export function buildPrintBTXML(
-  product: LabelProduct,
-  settings: BartenderPrintSettings,
-  copies = settings.copies
-): string {
-  const named = buildNamedDataSources(product, settings.fieldMap);
-  const jobName = `jewlery-${product.code || product.sku || product.id}`;
-  const formatPath = escapeXml(settings.documentPath.trim());
-  const copyCount = Math.max(1, Math.floor(copies || 1));
+function csvEscape(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
 
-  const namedXml = Object.entries(named)
+export function buildRecordSetCsv(
+  products: LabelProduct[],
+  fieldMap: BartenderFieldMap = DEFAULT_BARTENDER_FIELD_MAP
+): string {
+  const columns = Object.keys(fieldMap);
+  const header = columns.map(csvEscape).join(",");
+  const lines = products.map((product) =>
+    columns
+      .map((col) => csvEscape(resolveProductField(product, fieldMap[col])))
+      .join(",")
+  );
+  return [header, ...lines].join("\r\n");
+}
+
+function namedSubStringXml(named: Record<string, string>): string {
+  return Object.entries(named)
     .map(
       ([name, value]) =>
         `      <NamedSubString Name="${escapeXml(name)}">\n        <Value>${escapeXml(value)}</Value>\n      </NamedSubString>`
     )
     .join("\n");
+}
 
+/**
+ * Single BTXML request for the whole selection.
+ * Uses one Print + RecordSet so BarTender places BR13|BR14 on the same row
+ * when the document has 2 templates.
+ */
+export function buildBatchPrintBTXML(
+  products: LabelProduct[],
+  settings: BartenderPrintSettings,
+  copiesByProductId?: Record<number, number>
+): string {
+  if (products.length === 0) {
+    throw new Error("Nenhum produto selecionado");
+  }
+
+  const formatPath = escapeXml(settings.documentPath.trim());
   const printerXml = settings.printer.trim()
     ? `        <Printer>${escapeXml(settings.printer.trim())}</Printer>\n`
     : "";
+  const defaultCopies = Math.max(1, Math.floor(settings.copies || 1));
+  const copies = Math.max(
+    defaultCopies,
+    ...products.map((p) => copiesByProductId?.[p.id] ?? defaultCopies)
+  );
+  const csv = escapeXml(buildRecordSetCsv(products, settings.fieldMap));
+  const jobCodes = products
+    .map((p) => p.code || p.sku || String(p.id))
+    .join(",");
 
   return `<?xml version="1.0" encoding="utf-8"?>
 <XMLScript Version="2.0">
-  <Command Name="${escapeXml(jobName)}">
-    <Print WaitForJobToComplete="true" JobName="${escapeXml(jobName)}">
+  <Command Name="jewlery-labels">
+    <Print WaitForJobToComplete="true" JobName="jewlery-${escapeXml(jobCodes)}" ReturnPrintData="true" ReturnSummary="true" ReturnLabelData="true">
       <Format CloseAtEnd="true" SaveAtEnd="false">${formatPath}</Format>
       <PrintSetup>
-${printerXml}        <IdenticalCopiesOfLabel>${copyCount}</IdenticalCopiesOfLabel>
+${printerXml}        <IdenticalCopiesOfLabel>${copies}</IdenticalCopiesOfLabel>
       </PrintSetup>
-${namedXml}
+      <RecordSet Name="Text File 1" Type="btTextFile" AddIfNone="true">
+        <Delimitation>btDelimQuoteAndComma</Delimitation>
+        <UseFieldNamesFromFirstRecord>true</UseFieldNamesFromFirstRecord>
+        <TextData>${csv}</TextData>
+      </RecordSet>
     </Print>
   </Command>
 </XMLScript>
 `;
+}
+
+/**
+ * Fallback: still ONE HTTP request, but one Print per product with NamedSubString.
+ * Use when the .btw has Named Data Sources (Codigo, Nome…) instead of a DB.
+ */
+export function buildNamedSubstringBatchBTXML(
+  products: LabelProduct[],
+  settings: BartenderPrintSettings,
+  copiesByProductId?: Record<number, number>
+): string {
+  if (products.length === 0) {
+    throw new Error("Nenhum produto selecionado");
+  }
+
+  const formatPath = escapeXml(settings.documentPath.trim());
+  const printerXml = settings.printer.trim()
+    ? `        <Printer>${escapeXml(settings.printer.trim())}</Printer>\n`
+    : "";
+  const defaultCopies = Math.max(1, Math.floor(settings.copies || 1));
+
+  const prints = products
+    .map((product, index) => {
+      const named = buildNamedDataSources(product, settings.fieldMap);
+      const copies = copiesByProductId?.[product.id] ?? defaultCopies;
+      const code = product.code || product.sku || String(product.id);
+      return `    <Print WaitForJobToComplete="true" JobName="jewlery-${escapeXml(code)}" ReturnLabelData="true">
+      <Format CloseAtEnd="${index === products.length - 1 ? "true" : "false"}" SaveAtEnd="false">${formatPath}</Format>
+      <PrintSetup>
+${printerXml}        <IdenticalCopiesOfLabel>${copies}</IdenticalCopiesOfLabel>
+      </PrintSetup>
+${namedSubStringXml(named)}
+    </Print>`;
+    })
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<XMLScript Version="2.0">
+  <Command Name="jewlery-labels-named">
+${prints}
+  </Command>
+</XMLScript>
+`;
+}
+
+export function buildPrintBTXML(
+  product: LabelProduct,
+  settings: BartenderPrintSettings,
+  copies = settings.copies
+): string {
+  return buildNamedSubstringBatchBTXML([product], settings, {
+    [product.id]: copies,
+  });
+}
+
+export function buildBatchPrintActions(
+  products: LabelProduct[],
+  settings: BartenderPrintSettings,
+  copiesByProductId?: Record<number, number>
+) {
+  const defaultCopies = Math.max(1, Math.floor(settings.copies || 1));
+  const actions = products.map((product, index) => {
+    const named = buildNamedDataSources(product, settings.fieldMap);
+    const action: Record<string, unknown> = {
+      Name: `Print_${product.code || product.id}`,
+      Document: settings.documentPath,
+      DocumentFile: settings.documentPath,
+      SaveAfterPrint: false,
+      CloseDocumentAfterPrint: index === products.length - 1,
+      Copies: String(copiesByProductId?.[product.id] ?? defaultCopies),
+      NamedDataSources: named,
+      QueryPrompts: Object.entries(named).map(([Name, Value]) => ({
+        Name,
+        Value,
+      })),
+      VerifyPrintJobIsComplete: true,
+      ReturnPrintSummary: true,
+      ReturnLabelData: true,
+    };
+    if (settings.printer.trim()) {
+      action.Printer = settings.printer.trim();
+    }
+    return { PrintBTWAction: action };
+  });
+
+  return {
+    ActionGroup: {
+      Name: "JewleryLabelBatch",
+      Actions: actions,
+    },
+  };
 }
 
 export function buildPrintBTWAction(
@@ -298,38 +442,15 @@ export function buildPrintBTWAction(
   settings: BartenderPrintSettings,
   copies = settings.copies
 ) {
-  const named = buildNamedDataSources(product, settings.fieldMap);
-  const jobName = `jewlery-${product.code || product.sku || product.id}`;
-  const action: Record<string, unknown> = {
-    Name: jobName,
-    Document: settings.documentPath,
-    DocumentFile: settings.documentPath,
-    SaveAfterPrint: false,
-    CloseDocumentAfterPrint: true,
-    Copies: String(Math.max(1, Math.floor(copies || 1))),
-    NamedDataSources: named,
-    QueryPrompts: Object.entries(named).map(([Name, Value]) => ({
-      Name,
-      Value,
-    })),
-    VerifyPrintJobIsComplete: true,
-    ReturnPrintSummary: true,
-    ReturnLabelData: true,
-  };
-
-  if (settings.printer.trim()) {
-    action.Printer = settings.printer.trim();
-  }
-
-  return { PrintBTWAction: action };
+  return buildBatchPrintActions([product], settings, { [product.id]: copies })
+    .ActionGroup.Actions[0];
 }
 
 export function bartenderActionsUrl(apiUrl: string) {
   const base = apiUrl.replace(/\/+$/, "");
-  return `${base}/api/actions?Wait=60s&MessageCount=50&MessageSeverity=Info`;
+  return `${base}/api/actions?Wait=120s&MessageCount=100&MessageSeverity=Info`;
 }
 
-/** Full path to a .btw file (not a folder). */
 export function validateBartenderDocumentPath(path: string): string | null {
   const value = path.trim();
   if (!value) return "Informe o caminho completo do Documento2.btw neste PC.";
@@ -370,7 +491,7 @@ function isBartenderFaulted(body: unknown): boolean {
   return /faulted|failed|error/i.test(status);
 }
 
-function assertBartenderSuccess(product: LabelProduct, body: unknown) {
+function assertBartenderSuccess(body: unknown, context: string) {
   if (!isBartenderFaulted(body)) return;
   const messages = extractBartenderMessages(body);
   const detail =
@@ -378,7 +499,7 @@ function assertBartenderSuccess(product: LabelProduct, body: unknown) {
     messages[0] ||
     "Status Faulted";
   throw new BartenderPrintError(
-    `BarTender não imprimiu "${product.name}": ${detail}`,
+    `BarTender não imprimiu (${context}): ${detail}`,
     undefined,
     body
   );
@@ -420,46 +541,7 @@ async function postBartender(
   return parsed;
 }
 
-export async function printProductLabel(
-  product: LabelProduct,
-  settings: BartenderPrintSettings,
-  options?: { copies?: number; fetchImpl?: typeof fetch }
-): Promise<unknown> {
-  const fetchImpl = options?.fetchImpl ?? fetch;
-  const copies = options?.copies ?? settings.copies;
-
-  // Prefer BTXML NamedSubString (works with most desktop .btw data entry forms).
-  const btxml = buildPrintBTXML(product, settings, copies);
-  try {
-    const body = await postBartender(
-      settings,
-      btxml,
-      "application/xml",
-      fetchImpl
-    );
-    assertBartenderSuccess(product, body);
-    return body;
-  } catch (firstError) {
-    // Fallback: JSON PrintBTWAction with NamedDataSources + QueryPrompts
-    if (
-      firstError instanceof BartenderPrintError &&
-      firstError.message.includes("conectar ao BarTender")
-    ) {
-      throw firstError;
-    }
-
-    const payload = buildPrintBTWAction(product, settings, copies);
-    const body = await postBartender(
-      settings,
-      JSON.stringify(payload),
-      "application/json",
-      fetchImpl
-    );
-    assertBartenderSuccess(product, body);
-    return body;
-  }
-}
-
+/** One HTTP request containing every selected product. */
 export async function printProductLabels(
   products: LabelProduct[],
   settings: BartenderPrintSettings,
@@ -469,30 +551,97 @@ export async function printProductLabels(
     fetchImpl?: typeof fetch;
   }
 ): Promise<{ printed: number; errors: { product: LabelProduct; error: string }[] }> {
-  const errors: { product: LabelProduct; error: string }[] = [];
-  let printed = 0;
-
-  for (let i = 0; i < products.length; i++) {
-    const product = products[i];
-    options?.onProgress?.(i, products.length, product);
-    try {
-      await printProductLabel(product, settings, {
-        copies: options?.copiesByProductId?.[product.id] ?? settings.copies,
-        fetchImpl: options?.fetchImpl,
-      });
-      printed += 1;
-    } catch (e) {
-      errors.push({
-        product,
-        error: e instanceof Error ? e.message : "Erro desconhecido",
-      });
-    }
+  if (products.length === 0) {
+    return { printed: 0, errors: [] };
   }
 
-  options?.onProgress?.(
-    products.length,
-    products.length,
-    products[products.length - 1]
-  );
-  return { printed, errors };
+  const fetchImpl = options?.fetchImpl ?? fetch;
+  options?.onProgress?.(0, products.length, products[0]);
+
+  const codes = products.map((p) => p.code || p.sku || String(p.id)).join(", ");
+
+  try {
+    // 1) RecordSet batch — BR13|BR14 on the same row when the .btw has 2 templates
+    try {
+      const body = await postBartender(
+        settings,
+        buildBatchPrintBTXML(products, settings, options?.copiesByProductId),
+        "application/xml",
+        fetchImpl
+      );
+      assertBartenderSuccess(body, codes);
+    } catch (recordSetError) {
+      if (
+        recordSetError instanceof BartenderPrintError &&
+        recordSetError.message.includes("conectar ao BarTender")
+      ) {
+        throw recordSetError;
+      }
+
+      // 2) NamedSubString batch — still one request; each product keeps its own code
+      try {
+        const body = await postBartender(
+          settings,
+          buildNamedSubstringBatchBTXML(
+            products,
+            settings,
+            options?.copiesByProductId
+          ),
+          "application/xml",
+          fetchImpl
+        );
+        assertBartenderSuccess(body, codes);
+      } catch (namedError) {
+        if (
+          namedError instanceof BartenderPrintError &&
+          namedError.message.includes("conectar ao BarTender")
+        ) {
+          throw namedError;
+        }
+
+        // 3) JSON ActionGroup fallback
+        const body = await postBartender(
+          settings,
+          JSON.stringify(
+            buildBatchPrintActions(
+              products,
+              settings,
+              options?.copiesByProductId
+            )
+          ),
+          "application/json",
+          fetchImpl
+        );
+        assertBartenderSuccess(body, codes);
+      }
+    }
+
+    options?.onProgress?.(
+      products.length,
+      products.length,
+      products[products.length - 1]
+    );
+    return { printed: products.length, errors: [] };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : "Erro desconhecido";
+    return {
+      printed: 0,
+      errors: products.map((product) => ({ product, error })),
+    };
+  }
+}
+
+export async function printProductLabel(
+  product: LabelProduct,
+  settings: BartenderPrintSettings,
+  options?: { copies?: number; fetchImpl?: typeof fetch }
+): Promise<unknown> {
+  const result = await printProductLabels([product], settings, {
+    copiesByProductId: { [product.id]: options?.copies ?? settings.copies },
+    fetchImpl: options?.fetchImpl,
+  });
+  if (result.errors.length > 0) {
+    throw new BartenderPrintError(result.errors[0].error);
+  }
+  return { Status: "RanToCompletion", printed: result.printed };
 }

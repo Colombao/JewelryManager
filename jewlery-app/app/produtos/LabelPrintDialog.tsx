@@ -10,6 +10,8 @@ import {
   LabelProduct,
   applySelectedBtwFileName,
   buildNamedDataSources,
+  buildRecordSetCsv,
+  describePrintRows,
   fileNameFromDocumentPath,
   getProductLabelType,
   joinWindowsPath,
@@ -96,6 +98,17 @@ export default function LabelPrintDialog({
     productsOfType.length > 0 &&
     productsOfType.every((p) => selectedIds.has(p.id));
 
+  const printRows = useMemo(
+    () => describePrintRows(selectedProducts, settings.labelsPerRow || 2),
+    [selectedProducts, settings.labelsPerRow]
+  );
+  const previewCsv = useMemo(
+    () =>
+      selectedProducts.length > 0
+        ? buildRecordSetCsv(selectedProducts, settings.fieldMap)
+        : "",
+    [selectedProducts, settings.fieldMap]
+  );
   const previewProduct = selectedProducts[0] ?? null;
   const previewFields = previewProduct
     ? buildNamedDataSources(previewProduct, settings.fieldMap)
@@ -245,9 +258,9 @@ export default function LabelPrintDialog({
     >
       <div className="space-y-4">
         <p className="text-sm text-slate-500">
-          Escolha o tipo, marque só os produtos desejados e envie para o
-          BarTender deste PC. Cada item selecionado vira uma etiqueta com os
-          dados daquele produto.
+          Escolha o tipo e marque os produtos. Tudo vai em{" "}
+          <strong className="font-medium text-slate-700">um único envio</strong>{" "}
+          ao BarTender — com 2 por linha (ex.: BR13 | BR14), depois BR15.
         </p>
 
         <div>
@@ -402,24 +415,38 @@ export default function LabelPrintDialog({
           </div>
         </div>
 
-        {previewProduct && previewFields && (
-          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+        {selectedProducts.length > 0 && (
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              Prévia dos dados do 1º selecionado (
-              {previewProduct.code || previewProduct.name})
+              O que será impresso (1 request)
             </p>
-            <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-3">
-              {["Nome", "Codigo", "SKU", "Preco", "Barcode", "Categoria"].map(
-                (key) => (
-                  <div key={key} className="min-w-0">
-                    <dt className="text-slate-400">{key}</dt>
-                    <dd className="truncate font-medium text-slate-800">
-                      {previewFields[key] || "—"}
-                    </dd>
-                  </div>
-                )
-              )}
-            </dl>
+            <ul className="space-y-0.5 font-mono text-xs text-slate-800">
+              {printRows.map((row) => (
+                <li key={row}>{row}</li>
+              ))}
+            </ul>
+            {previewProduct && previewFields && (
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-slate-100 pt-2 text-xs sm:grid-cols-3">
+                {["Codigo", "Nome", "SKU", "Preco", "Barcode", "Categoria"].map(
+                  (key) => (
+                    <div key={key} className="min-w-0">
+                      <dt className="text-slate-400">{key}</dt>
+                      <dd className="truncate font-medium text-slate-800">
+                        {previewFields[key] || "—"}
+                      </dd>
+                    </div>
+                  )
+                )}
+              </dl>
+            )}
+            <details className="border-t border-slate-100 pt-2">
+              <summary className="cursor-pointer text-[11px] text-slate-500">
+                Ver CSV enviado ao BarTender
+              </summary>
+              <pre className="mt-1 max-h-28 overflow-auto rounded-md bg-slate-50 p-2 font-mono text-[10px] text-slate-700">
+                {previewCsv}
+              </pre>
+            </details>
           </div>
         )}
 
@@ -542,35 +569,55 @@ export default function LabelPrintDialog({
                 />
               </label>
 
-              <label className="block text-xs font-medium text-slate-600">
-                Cópias padrão
-                <input
-                  type="number"
-                  min={1}
-                  max={99}
-                  value={settings.copies}
-                  disabled={isPrinting}
-                  onChange={(e) =>
-                    persistSettings({
-                      ...settings,
-                      copies: Math.max(1, Number(e.target.value) || 1),
-                    })
-                  }
-                  className="mt-1 w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                />
-              </label>
+              <div className="flex flex-wrap gap-4">
+                <label className="block text-xs font-medium text-slate-600">
+                  Cópias padrão
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={settings.copies}
+                    disabled={isPrinting}
+                    onChange={(e) =>
+                      persistSettings({
+                        ...settings,
+                        copies: Math.max(1, Number(e.target.value) || 1),
+                      })
+                    }
+                    className="mt-1 w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                  />
+                </label>
+                <label className="block text-xs font-medium text-slate-600">
+                  Produtos por linha
+                  <input
+                    type="number"
+                    min={1}
+                    max={4}
+                    value={settings.labelsPerRow}
+                    disabled={isPrinting}
+                    onChange={(e) =>
+                      persistSettings({
+                        ...settings,
+                        labelsPerRow: Math.max(
+                          1,
+                          Math.min(4, Number(e.target.value) || 2)
+                        ),
+                      })
+                    }
+                    className="mt-1 w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                  />
+                </label>
+              </div>
 
               <p className="text-[11px] leading-relaxed text-slate-400">
-                No BarTender, as fontes nomeadas (Named Data Source /
-                NamedSubString) precisam se chamar{" "}
+                Se todas as etiquetas saem como{" "}
+                <span className="font-mono">BR01</span>, o texto no .btw ainda
+                está fixo. No BarTender, ligue o objeto do código ao campo{" "}
+                <span className="font-mono">Codigo</span> (banco de texto / Named
+                Data Source). Mesmo para{" "}
                 <span className="font-mono">Nome</span>,{" "}
-                <span className="font-mono">Codigo</span>,{" "}
                 <span className="font-mono">SKU</span>,{" "}
-                <span className="font-mono">Preco</span>,{" "}
-                <span className="font-mono">Barcode</span>,{" "}
-                <span className="font-mono">Categoria</span> — senão a etiqueta
-                sai com o valor padrão do .btw e parece que “não imprimiu o
-                produto certo”.
+                <span className="font-mono">Preco</span>.
               </p>
             </div>
           )}
