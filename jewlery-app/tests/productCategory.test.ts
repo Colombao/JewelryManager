@@ -18,8 +18,12 @@ describe("extractCategoryName", () => {
 
   it("maps other jewelry prefixes", () => {
     expect(extractCategoryName("PL-001 Prata")).toBe("Pulseira");
+    expect(extractCategoryName("PUL-ALE Dourado 7 ml")).toBe("Pulseira");
     expect(extractCategoryName("CJ Mix dourado")).toBe("Conjunto");
     expect(extractCategoryName("AN-22")).toBe("Anel");
+    expect(extractCategoryName("ANÉIS-ALE Dourado 10 ml")).toBe("Anel");
+    expect(extractCategoryName("CORR-ALE Dourado 7 ml")).toBe("Colar");
+    expect(extractCategoryName("PING-ALE Dourado 7 ml")).toBe("Pingente");
   });
 });
 

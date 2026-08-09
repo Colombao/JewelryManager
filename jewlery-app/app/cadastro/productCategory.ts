@@ -14,7 +14,11 @@ export const CATEGORY_RULES: CategoryRule[] = [
   {
     label: "Pulseira",
     prefix: "pl",
-    patterns: [/^PL(?:U(?:SEIRA)?)?(?:[-_\s]|$)/i, /\bPULSEIRA\b/i],
+    patterns: [
+      /^PL(?:U(?:SEIRA)?)?(?:[-_\s]|$)/i,
+      /^PUL(?:SEIRA)?(?:[-_\s]|$)/i,
+      /\bPULSEIRA\b/i,
+    ],
   },
   {
     label: "Conjunto",
@@ -24,12 +28,26 @@ export const CATEGORY_RULES: CategoryRule[] = [
   {
     label: "Anel",
     prefix: "an",
-    patterns: [/^AN(?:EL)?(?:[-_\s]|$)/i, /\bANEL\b/i],
+    patterns: [
+      /^AN(?:EL|EIS|ÉIS)?(?:[-_\s]|$)/i,
+      /\bANEL(?:S|IS)?\b/i,
+      /\bANÉIS\b/i,
+    ],
   },
   {
     label: "Colar",
     prefix: "co",
-    patterns: [/^COL(?:AR)?(?:[-_\s]|$)/i, /\bCOLAR\b/i, /\bCORRENTE\b/i],
+    patterns: [
+      /^COL(?:AR)?(?:[-_\s]|$)/i,
+      /^CORR(?:ENTE)?(?:[-_\s]|$)/i,
+      /\bCOLAR\b/i,
+      /\bCORRENTE\b/i,
+    ],
+  },
+  {
+    label: "Pingente",
+    prefix: "pi",
+    patterns: [/^PING(?:ENTE)?(?:[-_\s]|$)/i, /\bPINGENTE\b/i],
   },
   {
     label: "Tornozeleira",

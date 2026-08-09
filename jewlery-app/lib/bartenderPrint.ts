@@ -18,10 +18,13 @@ export interface LabelProduct {
 
 export interface BartenderPrintSettings {
   apiUrl: string;
+  /** Full path to the .btw file on the local Windows PC */
   documentPath: string;
+  /** Directory that contains the .btw (used with file picker) */
+  documentFolder: string;
   printer: string;
   copies: number;
-  /** Named data source names in Documento2.btw → product field keys */
+  /** Named data source / NamedSubString names in the .btw → product field keys */
   fieldMap: BartenderFieldMap;
 }
 
@@ -43,6 +46,10 @@ export type BartenderFieldMap = Record<string, BartenderProductField>;
 
 export const BARTENDER_SETTINGS_STORAGE_KEY = "jewlery.bartenderPrint.settings";
 
+/**
+ * Default Named Data Source / NamedSubString names sent to Documento2.btw.
+ * Rename the sources in BarTender to match, or edit this map in settings.
+ */
 export const DEFAULT_BARTENDER_FIELD_MAP: BartenderFieldMap = {
   Nome: "name",
   Name: "name",
@@ -56,6 +63,7 @@ export const DEFAULT_BARTENDER_FIELD_MAP: BartenderFieldMap = {
   CodigoBarras: "barcode",
   Categoria: "category",
   Category: "category",
+  Tipo: "category",
   Preco: "priceFormatted",
   Preco1: "priceFormatted",
   Price: "priceFormatted",
@@ -63,16 +71,66 @@ export const DEFAULT_BARTENDER_FIELD_MAP: BartenderFieldMap = {
 };
 
 export function getDefaultBartenderSettings(): BartenderPrintSettings {
+  const documentPath =
+    process.env.NEXT_PUBLIC_BARTENDER_DOCUMENT?.trim() ||
+    "C:\\Etiquetas\\Documento2.btw";
   return {
     apiUrl:
       process.env.NEXT_PUBLIC_BARTENDER_API_URL?.trim() ||
       "http://localhost:5159",
-    documentPath:
-      process.env.NEXT_PUBLIC_BARTENDER_DOCUMENT?.trim() ||
-      "C:\\Etiquetas\\Documento2.btw",
+    documentPath,
+    documentFolder: folderFromDocumentPath(documentPath),
     printer: process.env.NEXT_PUBLIC_BARTENDER_PRINTER?.trim() || "",
     copies: 1,
     fieldMap: { ...DEFAULT_BARTENDER_FIELD_MAP },
+  };
+}
+
+export function folderFromDocumentPath(path: string): string {
+  const value = path.trim().replace(/[\\/]+$/, "");
+  if (!value) return "";
+  if (/\.btw$/i.test(value)) {
+    return value.replace(/[\\/][^\\/]+$/, "");
+  }
+  return value;
+}
+
+export function fileNameFromDocumentPath(path: string): string {
+  const value = path.trim();
+  const match = value.match(/[^\\/]+\.btw$/i);
+  return match?.[0] ?? "";
+}
+
+export function joinWindowsPath(folder: string, fileName: string): string {
+  const dir = folder.trim().replace(/[\\/]+$/, "");
+  const name = fileName.trim().replace(/^.*[\\/]/, "");
+  if (!dir) return name;
+  if (!name) return dir;
+  const sep = dir.includes("/") && !dir.includes("\\") ? "/" : "\\";
+  return `${dir}${sep}${name}`;
+}
+
+/** Apply a picked .btw file name onto the remembered folder / path. */
+export function applySelectedBtwFileName(
+  settings: Pick<BartenderPrintSettings, "documentPath" | "documentFolder">,
+  fileName: string
+): Pick<BartenderPrintSettings, "documentPath" | "documentFolder"> {
+  const name = fileName.trim().replace(/^.*[\\/]/, "");
+  if (!name || !/\.btw$/i.test(name)) {
+    return {
+      documentPath: settings.documentPath,
+      documentFolder: settings.documentFolder,
+    };
+  }
+
+  const folder =
+    settings.documentFolder.trim() ||
+    folderFromDocumentPath(settings.documentPath) ||
+    "C:\\Etiquetas";
+
+  return {
+    documentFolder: folder,
+    documentPath: joinWindowsPath(folder, name),
   };
 }
 
@@ -84,9 +142,17 @@ export function loadBartenderSettings(): BartenderPrintSettings {
     const raw = window.localStorage.getItem(BARTENDER_SETTINGS_STORAGE_KEY);
     if (!raw) return defaults;
     const parsed = JSON.parse(raw) as Partial<BartenderPrintSettings>;
+    const documentPath = parsed.documentPath?.trim() || defaults.documentPath;
+    const documentFolder =
+      parsed.documentFolder?.trim() ||
+      folderFromDocumentPath(documentPath) ||
+      defaults.documentFolder;
+
     return {
       ...defaults,
       ...parsed,
+      documentPath,
+      documentFolder,
       fieldMap: {
         ...defaults.fieldMap,
         ...(parsed.fieldMap ?? {}),
@@ -109,8 +175,11 @@ export function saveBartenderSettings(settings: BartenderPrintSettings) {
   );
 }
 
+/** Jewelry type for label printing (Brinco, Pulseira…), inferred from the name. */
 export function getProductLabelType(product: LabelProduct): string {
-  return product.category?.name?.trim() || extractCategoryName(product.name);
+  // DB category is often the catalog line name (e.g. "BR-ALE Dourado 3 ml"),
+  // not Brinco/Pulseira — always derive the type from the product name.
+  return extractCategoryName(product.name);
 }
 
 export function listProductLabelTypes(products: LabelProduct[]): string[] {
@@ -178,17 +247,74 @@ export function buildNamedDataSources(
   return named;
 }
 
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/** Classic BTXML — NamedSubString is the most reliable way to fill label fields. */
+export function buildPrintBTXML(
+  product: LabelProduct,
+  settings: BartenderPrintSettings,
+  copies = settings.copies
+): string {
+  const named = buildNamedDataSources(product, settings.fieldMap);
+  const jobName = `jewlery-${product.code || product.sku || product.id}`;
+  const formatPath = escapeXml(settings.documentPath.trim());
+  const copyCount = Math.max(1, Math.floor(copies || 1));
+
+  const namedXml = Object.entries(named)
+    .map(
+      ([name, value]) =>
+        `      <NamedSubString Name="${escapeXml(name)}">\n        <Value>${escapeXml(value)}</Value>\n      </NamedSubString>`
+    )
+    .join("\n");
+
+  const printerXml = settings.printer.trim()
+    ? `        <Printer>${escapeXml(settings.printer.trim())}</Printer>\n`
+    : "";
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<XMLScript Version="2.0">
+  <Command Name="${escapeXml(jobName)}">
+    <Print WaitForJobToComplete="true" JobName="${escapeXml(jobName)}">
+      <Format CloseAtEnd="true" SaveAtEnd="false">${formatPath}</Format>
+      <PrintSetup>
+${printerXml}        <IdenticalCopiesOfLabel>${copyCount}</IdenticalCopiesOfLabel>
+      </PrintSetup>
+${namedXml}
+    </Print>
+  </Command>
+</XMLScript>
+`;
+}
+
 export function buildPrintBTWAction(
   product: LabelProduct,
   settings: BartenderPrintSettings,
   copies = settings.copies
 ) {
+  const named = buildNamedDataSources(product, settings.fieldMap);
+  const jobName = `jewlery-${product.code || product.sku || product.id}`;
   const action: Record<string, unknown> = {
+    Name: jobName,
     Document: settings.documentPath,
     DocumentFile: settings.documentPath,
     SaveAfterPrint: false,
-    Copies: Math.max(1, Math.floor(copies || 1)),
-    NamedDataSources: buildNamedDataSources(product, settings.fieldMap),
+    CloseDocumentAfterPrint: true,
+    Copies: String(Math.max(1, Math.floor(copies || 1))),
+    NamedDataSources: named,
+    QueryPrompts: Object.entries(named).map(([Name, Value]) => ({
+      Name,
+      Value,
+    })),
+    VerifyPrintJobIsComplete: true,
+    ReturnPrintSummary: true,
+    ReturnLabelData: true,
   };
 
   if (settings.printer.trim()) {
@@ -213,34 +339,6 @@ export function validateBartenderDocumentPath(path: string): string | null {
   return null;
 }
 
-export async function checkBartenderAvailable(
-  apiUrl: string,
-  fetchImpl: typeof fetch = fetch
-): Promise<boolean> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2500);
-    const res = await fetchImpl(bartenderActionsUrl(apiUrl), {
-      method: "OPTIONS",
-      signal: controller.signal,
-      credentials: "include",
-    }).catch(async () => {
-      // Some BarTender installs reject OPTIONS; a lightweight GET/POST probe
-      // is still useful to detect "connection refused".
-      return fetchImpl(apiUrl.replace(/\/+$/, "") + "/", {
-        method: "GET",
-        signal: controller.signal,
-        credentials: "include",
-        mode: "no-cors",
-      });
-    });
-    clearTimeout(timer);
-    return Boolean(res);
-  } catch {
-    return false;
-  }
-}
-
 export class BartenderPrintError extends Error {
   constructor(
     message: string,
@@ -252,22 +350,53 @@ export class BartenderPrintError extends Error {
   }
 }
 
-export async function printProductLabel(
-  product: LabelProduct,
-  settings: BartenderPrintSettings,
-  options?: { copies?: number; fetchImpl?: typeof fetch }
-): Promise<unknown> {
-  const fetchImpl = options?.fetchImpl ?? fetch;
-  const copies = options?.copies ?? settings.copies;
-  const payload = buildPrintBTWAction(product, settings, copies);
+function extractBartenderMessages(body: unknown): string[] {
+  if (!body || typeof body !== "object") return [];
+  const record = body as Record<string, unknown>;
+  const messages = record.Messages ?? record.messages;
+  if (Array.isArray(messages)) {
+    return messages.map((m) => String(m));
+  }
+  return [];
+}
 
+function isBartenderFaulted(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const status = String(
+    (body as Record<string, unknown>).Status ??
+      (body as Record<string, unknown>).status ??
+      ""
+  );
+  return /faulted|failed|error/i.test(status);
+}
+
+function assertBartenderSuccess(product: LabelProduct, body: unknown) {
+  if (!isBartenderFaulted(body)) return;
+  const messages = extractBartenderMessages(body);
+  const detail =
+    messages.find((m) => /\[Error\]/i.test(m)) ||
+    messages[0] ||
+    "Status Faulted";
+  throw new BartenderPrintError(
+    `BarTender não imprimiu "${product.name}": ${detail}`,
+    undefined,
+    body
+  );
+}
+
+async function postBartender(
+  settings: BartenderPrintSettings,
+  body: string,
+  contentType: string,
+  fetchImpl: typeof fetch
+): Promise<unknown> {
   let response: Response;
   try {
     response = await fetchImpl(bartenderActionsUrl(settings.apiUrl), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": contentType },
       credentials: "include",
-      body: JSON.stringify(payload),
+      body,
     });
   } catch {
     throw new BartenderPrintError(
@@ -275,20 +404,60 @@ export async function printProductLabel(
     );
   }
 
-  const contentType = response.headers.get("content-type") || "";
-  const body = contentType.includes("application/json")
+  const responseType = response.headers.get("content-type") || "";
+  const parsed = responseType.includes("application/json")
     ? await response.json().catch(() => null)
     : await response.text().catch(() => null);
 
   if (!response.ok) {
     throw new BartenderPrintError(
-      `BarTender retornou erro ao imprimir "${product.name}" (HTTP ${response.status}).`,
+      `BarTender retornou HTTP ${response.status}.`,
       response.status,
-      body
+      parsed
     );
   }
 
-  return body;
+  return parsed;
+}
+
+export async function printProductLabel(
+  product: LabelProduct,
+  settings: BartenderPrintSettings,
+  options?: { copies?: number; fetchImpl?: typeof fetch }
+): Promise<unknown> {
+  const fetchImpl = options?.fetchImpl ?? fetch;
+  const copies = options?.copies ?? settings.copies;
+
+  // Prefer BTXML NamedSubString (works with most desktop .btw data entry forms).
+  const btxml = buildPrintBTXML(product, settings, copies);
+  try {
+    const body = await postBartender(
+      settings,
+      btxml,
+      "application/xml",
+      fetchImpl
+    );
+    assertBartenderSuccess(product, body);
+    return body;
+  } catch (firstError) {
+    // Fallback: JSON PrintBTWAction with NamedDataSources + QueryPrompts
+    if (
+      firstError instanceof BartenderPrintError &&
+      firstError.message.includes("conectar ao BarTender")
+    ) {
+      throw firstError;
+    }
+
+    const payload = buildPrintBTWAction(product, settings, copies);
+    const body = await postBartender(
+      settings,
+      JSON.stringify(payload),
+      "application/json",
+      fetchImpl
+    );
+    assertBartenderSuccess(product, body);
+    return body;
+  }
 }
 
 export async function printProductLabels(
@@ -320,6 +489,10 @@ export async function printProductLabels(
     }
   }
 
-  options?.onProgress?.(products.length, products.length, products[products.length - 1]);
+  options?.onProgress?.(
+    products.length,
+    products.length,
+    products[products.length - 1]
+  );
   return { printed, errors };
 }
