@@ -111,8 +111,33 @@ async function allocateBaseCode(product) {
 }
 
 /**
+ * Retorna o primeiro valor livre em `sku`/`barcode`, ou null.
+ * `excludeId` pode manter o valor se já for do próprio produto.
+ */
+async function pickUniqueField(field, candidates, excludeId) {
+  const seen = new Set();
+
+  for (const raw of candidates) {
+    const value = raw?.toString?.().trim?.() || null;
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const found = await prisma.product.findFirst({
+      where: { [field]: value },
+      select: { id: true },
+    });
+
+    if (!found || found.id === excludeId) return value;
+  }
+
+  return null;
+}
+
+/**
  * Cria um item novo para BASE/P/M/G e liga todos pelo trioGroupId.
- * Preço: só copia o do produto origem; cada item é precificado depois à parte.
+ * SKU/barcode são resolvidos sem violar unique (Product_sku_key / barcode).
  */
 async function ensureTrioVariants(productId) {
   const product = await prisma.product.findUnique({
@@ -134,6 +159,8 @@ async function ensureTrioVariants(productId) {
     ? stripSizeLabel(product.description)
     : null;
   const currentSlot = resolveCurrentSlot(product);
+  const sourceSku = product.sku?.trim() || product.reference?.trim() || null;
+  const sourceBarcode = product.barcode?.trim() || null;
 
   for (let index = 0; index < codes.length; index++) {
     const code = codes[index];
@@ -145,6 +172,38 @@ async function ensureTrioVariants(productId) {
       target = product;
     }
 
+    const desiredSku = suffix
+      ? withSizeSuffix(sourceSku, suffix)
+      : sourceSku;
+    const desiredBarcode = suffix ? code : sourceBarcode || code;
+
+    const sku = await pickUniqueField(
+      "sku",
+      [desiredSku, code, `${code}-${trioSize}`],
+      target?.id
+    );
+    const barcode = await pickUniqueField(
+      "barcode",
+      [desiredBarcode, code, `${code}-bc`],
+      target?.id
+    );
+
+    // Se o SKU/barcode ainda está no produto origem e vamos gravar noutro alvo,
+    // libera antes para não estourar unique no update.
+    if (target && target.id !== product.id) {
+      const clearData = {};
+      if (sku && product.sku && product.sku === sku) clearData.sku = null;
+      if (barcode && product.barcode && product.barcode === barcode) {
+        clearData.barcode = null;
+      }
+      if (Object.keys(clearData).length > 0) {
+        await prisma.product.update({
+          where: { id: product.id },
+          data: clearData,
+        });
+      }
+    }
+
     const identity = {
       code,
       name: suffix ? withSizeName(baseName, suffix) : baseName,
@@ -153,15 +212,11 @@ async function ensureTrioVariants(productId) {
           ? withSizeName(baseDescription, suffix)
           : null
         : baseDescription,
-      sku: suffix ? withSizeSuffix(product.sku, suffix) : product.sku,
+      sku,
       reference: suffix
-        ? withSizeSuffix(product.reference, suffix)
-        : product.reference,
-      barcode: suffix
-        ? code
-        : product.barcode?.trim()
-          ? product.barcode
-          : code,
+        ? withSizeSuffix(product.reference, suffix) || code
+        : product.reference || code,
+      barcode,
       isTrio: true,
       trioGroupId,
       trioSize,
@@ -213,4 +268,4 @@ async function ensureTrioVariants(productId) {
   };
 }
 
-export { ensureTrioVariants, TRIO_SIZES };
+export { ensureTrioVariants, TRIO_SIZES, pickUniqueField };

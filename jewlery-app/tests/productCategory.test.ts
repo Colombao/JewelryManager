@@ -116,6 +116,12 @@ describe("trio size codes", () => {
     expect(items[2].name).toBe("Brinco Argola (Médio)");
     expect(items[3].name).toBe("Brinco Argola (Grande)");
     expect(items[1].reference).toBe("REF1-P");
+    expect(items.map((item) => item.sku)).toEqual([
+      "REF1",
+      "REF1-P",
+      "REF1-M",
+      "REF1-G",
+    ]);
   });
 
   it("reserves P/M/G while assigning sequential codes", () => {

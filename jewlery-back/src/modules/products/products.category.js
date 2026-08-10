@@ -161,6 +161,7 @@ function expandTrioItem(item) {
   return codes.map((code, index) => {
     const suffix = TRIO_SIZE_SUFFIXES[index];
     const trioSize = TRIO_SIZES[index];
+    const baseSku = item.sku?.trim?.() || item.reference?.trim?.() || null;
 
     return {
       ...item,
@@ -169,10 +170,13 @@ function expandTrioItem(item) {
       description: suffix && item.description
         ? withSizeName(item.description, suffix)
         : item.description,
-      sku: suffix ? withSizeSuffix(item.sku, suffix) : item.sku,
+      // SKU único por tamanho (evita Product_sku_key)
+      sku: suffix
+        ? withSizeSuffix(baseSku, suffix) || code
+        : baseSku || code,
       reference: suffix
-        ? withSizeSuffix(item.reference, suffix)
-        : item.reference,
+        ? withSizeSuffix(item.reference, suffix) || code
+        : item.reference || code,
       barcode: suffix
         ? code
         : item.barcode?.trim?.()
