@@ -26,7 +26,7 @@ async function list(req, res) {
       where: {
         active: req.query.active ? req.query.active === "true" : undefined,
       },
-      orderBy: { id: "desc" },
+      orderBy: [{ code: "asc" }, { id: "asc" }],
       include: {
         supplier: true,
         category: true,

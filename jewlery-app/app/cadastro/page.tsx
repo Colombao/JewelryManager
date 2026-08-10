@@ -119,11 +119,23 @@ function formatCurrency(value: string | null | undefined) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function compareProductCodes(a: string | null | undefined, b: string | null | undefined) {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" });
+}
+
 function resolveImageUrl(image: string | null | undefined, apiUrl: string) {
   if (!image) return null;
   if (image.startsWith("http")) return image;
   return `${apiUrl}${image.startsWith("/") ? image : `/${image}`}`;
 }
+
+type StatusFilter = "all" | "active" | "inactive";
+type TrioFilter = "all" | "yes" | "no";
+
+const TRIO_SIZE_FILTERS = ["BASE", "P", "M", "G"] as const;
 
 export default function CadastroItem() {
   const [formData, setFormData] = useState(initialFormData);
@@ -149,6 +161,13 @@ export default function CadastroItem() {
   const [skipDuplicates, setSkipDuplicates] = useState(true);
   const [importMeta, setImportMeta] = useState<PdfCatalogMeta | null>(null);
   const [search, setSearch] = useState("");
+  const [filterCategoryId, setFilterCategoryId] = useState("");
+  const [filterSupplierId, setFilterSupplierId] = useState("");
+  const [filterCollectionId, setFilterCollectionId] = useState("");
+  const [filterPlatingId, setFilterPlatingId] = useState("");
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>("all");
+  const [filterTrio, setFilterTrio] = useState<TrioFilter>("all");
+  const [filterTrioSize, setFilterTrioSize] = useState("");
   const [profitMargins, setProfitMargins] = useState<ProfitMargin[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
   const pdfImportInputRef = useRef<HTMLInputElement>(null);
@@ -653,11 +672,88 @@ export default function CadastroItem() {
     );
   }
 
+  const sortedCategories = useMemo(
+    () =>
+      [...categories].sort((a, b) =>
+        a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })
+      ),
+    [categories]
+  );
+  const sortedSuppliers = useMemo(
+    () =>
+      [...suppliers].sort((a, b) =>
+        a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })
+      ),
+    [suppliers]
+  );
+  const sortedCollections = useMemo(
+    () =>
+      [...collections].sort((a, b) =>
+        a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })
+      ),
+    [collections]
+  );
+  const sortedPlatings = useMemo(
+    () =>
+      [...platings].sort((a, b) =>
+        a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })
+      ),
+    [platings]
+  );
+
+  const hasActiveFilters =
+    Boolean(search.trim()) ||
+    Boolean(filterCategoryId) ||
+    Boolean(filterSupplierId) ||
+    Boolean(filterCollectionId) ||
+    Boolean(filterPlatingId) ||
+    filterStatus !== "all" ||
+    filterTrio !== "all" ||
+    Boolean(filterTrioSize);
+
+  function clearFilters() {
+    setSearch("");
+    setFilterCategoryId("");
+    setFilterSupplierId("");
+    setFilterCollectionId("");
+    setFilterPlatingId("");
+    setFilterStatus("all");
+    setFilterTrio("all");
+    setFilterTrioSize("");
+  }
+
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return products;
 
-    return products.filter((p) => {
+    const filtered = products.filter((p) => {
+      if (filterCategoryId && String(p.categoryId ?? "") !== filterCategoryId) {
+        return false;
+      }
+      if (filterSupplierId && String(p.supplierId ?? "") !== filterSupplierId) {
+        return false;
+      }
+      if (
+        filterCollectionId &&
+        String(p.collectionId ?? "") !== filterCollectionId
+      ) {
+        return false;
+      }
+      if (filterPlatingId && String(p.platingTypeId ?? "") !== filterPlatingId) {
+        return false;
+      }
+      if (filterStatus === "active" && !p.active) return false;
+      if (filterStatus === "inactive" && p.active) return false;
+      if (filterTrio === "yes" && !p.isTrio) return false;
+      if (filterTrio === "no" && p.isTrio) return false;
+      if (
+        filterTrioSize &&
+        String(p.trioSize ?? "").toUpperCase() !== filterTrioSize
+      ) {
+        return false;
+      }
+
+      if (!term) return true;
+
       const haystack = [
         p.code,
         p.sku,
@@ -669,6 +765,7 @@ export default function CadastroItem() {
         p.category?.name,
         p.platingType?.name,
         p.collection?.name,
+        p.trioSize,
       ]
         .filter(Boolean)
         .join(" ")
@@ -676,7 +773,23 @@ export default function CadastroItem() {
 
       return haystack.includes(term);
     });
-  }, [products, search]);
+
+    return [...filtered].sort((a, b) => {
+      const byCode = compareProductCodes(a.code, b.code);
+      if (byCode !== 0) return byCode;
+      return a.id - b.id;
+    });
+  }, [
+    products,
+    search,
+    filterCategoryId,
+    filterSupplierId,
+    filterCollectionId,
+    filterPlatingId,
+    filterStatus,
+    filterTrio,
+    filterTrioSize,
+  ]);
 
   const productColumns: DataTableColumn<Product>[] = useMemo(
     () => [
@@ -959,7 +1072,7 @@ export default function CadastroItem() {
             </p>
           </div>
 
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
             <div className="relative flex-1 max-w-xl">
               <input
                 type="search"
@@ -1024,6 +1137,134 @@ export default function CadastroItem() {
               >
                 Novo Produto
               </Button>
+            </div>
+          </div>
+
+          <div className="mb-6 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-slate-700">Filtros</p>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                >
+                  Limpar filtros
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+              <label className="block text-xs text-slate-500">
+                Categoria
+                <select
+                  value={filterCategoryId}
+                  onChange={(e) => setFilterCategoryId(e.target.value)}
+                  className="mt-1 w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  <option value="">Todas</option>
+                  {sortedCategories.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-slate-500">
+                Fornecedor
+                <select
+                  value={filterSupplierId}
+                  onChange={(e) => setFilterSupplierId(e.target.value)}
+                  className="mt-1 w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  <option value="">Todos</option>
+                  {sortedSuppliers.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-slate-500">
+                Coleção
+                <select
+                  value={filterCollectionId}
+                  onChange={(e) => setFilterCollectionId(e.target.value)}
+                  className="mt-1 w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  <option value="">Todas</option>
+                  {sortedCollections.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-slate-500">
+                Banho
+                <select
+                  value={filterPlatingId}
+                  onChange={(e) => setFilterPlatingId(e.target.value)}
+                  className="mt-1 w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  <option value="">Todos</option>
+                  {sortedPlatings.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-slate-500">
+                Status
+                <select
+                  value={filterStatus}
+                  onChange={(e) =>
+                    setFilterStatus(e.target.value as StatusFilter)
+                  }
+                  className="mt-1 w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  <option value="all">Todos</option>
+                  <option value="active">Ativos</option>
+                  <option value="inactive">Inativos</option>
+                </select>
+              </label>
+              <label className="block text-xs text-slate-500">
+                Trio
+                <select
+                  value={filterTrio}
+                  onChange={(e) => setFilterTrio(e.target.value as TrioFilter)}
+                  className="mt-1 w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  <option value="all">Todos</option>
+                  <option value="yes">É trio</option>
+                  <option value="no">Não é trio</option>
+                </select>
+              </label>
+            </div>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <label className="block text-xs text-slate-500">
+                Tamanho do trio
+                <select
+                  value={filterTrioSize}
+                  onChange={(e) => setFilterTrioSize(e.target.value)}
+                  className="mt-1 w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  <option value="">Todos</option>
+                  {TRIO_SIZE_FILTERS.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="sm:col-span-1 lg:col-span-2 flex items-end">
+                <p className="text-xs text-slate-500 pb-2">
+                  Lista ordenada por <span className="font-medium text-slate-700">Código</span>
+                  {hasActiveFilters
+                    ? ` · ${filteredProducts.length} resultado(s)`
+                    : null}
+                </p>
+              </div>
             </div>
           </div>
 
